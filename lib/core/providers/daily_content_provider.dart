@@ -50,7 +50,11 @@ class DailyContentNotifier extends StateNotifier<DailyContentState> {
   static const _groqUrl = 'https://api.groq.com/openai/v1/chat/completions';
   static const _model = 'llama-3.3-70b-versatile';
 
-  String get _apiKey => (dotenv.env['GROQ_API_KEY'] ?? '').trim();
+  static const _compiledKey = String.fromEnvironment('GROQ_API_KEY');
+  String get _apiKey {
+    if (_compiledKey.isNotEmpty) return _compiledKey;
+    return (dotenv.env['GROQ_API_KEY'] ?? '').trim();
+  }
 
   DailyContentNotifier(this._ref) : super(const DailyContentState());
 
