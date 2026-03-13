@@ -132,7 +132,7 @@ Keep it under 120 words total. Use "you" not third person. No markdown formattin
 
   /// Generate day-of-week pattern insight.
   WellnessInsight? generateDayOfWeekInsight(List<MoodEntry> entries) {
-    if (entries.length < 14) return null;
+    if (entries.length < 5) return null;
 
     final byDow = <int, List<double>>{};
     for (final e in entries) {
@@ -146,7 +146,7 @@ Keep it under 120 words total. Use "you" not third person. No markdown formattin
           MapEntry(dow, scores.reduce((a, b) => a + b) / scores.length),
     );
 
-    if (dayAvgs.length < 4) return null;
+    if (dayAvgs.length < 3) return null;
 
     final sorted = dayAvgs.entries.toList()
       ..sort((a, b) => a.value.compareTo(b.value));
@@ -179,7 +179,7 @@ Keep it under 120 words total. Use "you" not third person. No markdown formattin
     List<MoodEntry> moodEntries,
     List<JournalEntry> journalEntries,
   ) {
-    if (journalEntries.length < 5 || moodEntries.length < 10) return null;
+    if (journalEntries.length < 3 || moodEntries.length < 5) return null;
 
     // Find mood on days with/without journaling
     final journalDays = journalEntries.map((j) => _dayKey(j.createdAt)).toSet();
@@ -222,7 +222,7 @@ Keep it under 120 words total. Use "you" not third person. No markdown formattin
 
   /// Generate a proactive suggestion based on upcoming patterns.
   WellnessInsight? generatePredictiveSuggestion(List<MoodEntry> entries) {
-    if (entries.length < 14) return null;
+    if (entries.length < 5) return null;
 
     final alerts = TrendAnalyzer.analyze(entries: entries);
     final weeklyPattern = alerts
@@ -242,6 +242,70 @@ Keep it under 120 words total. Use "you" not third person. No markdown formattin
     );
   }
 
+  /// Generate a mood summary insight — always available with 3+ entries.
+  WellnessInsight? generateMoodSummaryInsight(List<MoodEntry> entries) {
+    if (entries.length < 3) return null;
+
+    final recent = entries.take(7).toList();
+    final avg = recent.map((e) => e.moodScore).reduce((a, b) => a + b) /
+        recent.length;
+
+    // Trend: compare last 3 vs previous 3
+    String trendText = '';
+    if (entries.length >= 6) {
+      final latest3 =
+          entries.take(3).map((e) => e.moodScore.toDouble()).toList();
+      final prev3 =
+          entries.skip(3).take(3).map((e) => e.moodScore.toDouble()).toList();
+      final latestAvg = latest3.reduce((a, b) => a + b) / 3;
+      final prevAvg = prev3.reduce((a, b) => a + b) / 3;
+      final diff = latestAvg - prevAvg;
+      if (diff > 0.5) {
+        trendText = 'Your mood has been improving lately — great work! ';
+      } else if (diff < -0.5) {
+        trendText =
+            'Your mood has dipped slightly recently. A mindfulness break or chat with Maya might help. ';
+      } else {
+        trendText = 'Your mood has been fairly consistent recently. ';
+      }
+    }
+
+    // Top emotion
+    final emotionCounts = <String, int>{};
+    for (final e in recent) {
+      for (final emotion in e.emotions) {
+        emotionCounts[emotion] = (emotionCounts[emotion] ?? 0) + 1;
+      }
+    }
+    final topEmotion = emotionCounts.isEmpty
+        ? null
+        : (emotionCounts.entries.toList()
+              ..sort((a, b) => b.value.compareTo(a.value)))
+            .first
+            .key;
+
+    final bandLabel = avg >= 8
+        ? 'great'
+        : avg >= 6
+            ? 'good'
+            : avg >= 4
+                ? 'moderate'
+                : 'low';
+    final emotionText = topEmotion != null
+        ? ' Your most frequent emotion has been "$topEmotion".'
+        : '';
+
+    return WellnessInsight(
+      id: 'mood_summary',
+      title: 'Recent Mood Overview',
+      body:
+          '${trendText}Average mood: ${avg.toStringAsFixed(1)}/10 — $bandLabel.$emotionText',
+      type: InsightType.pattern,
+      generatedAt: DateTime.now(),
+      metadata: {'avgMood': avg},
+    );
+  }
+
   // ─── Compile All Insights ─────────────────────────────
 
   /// Generate all available static insights from user data.
@@ -251,13 +315,18 @@ Keep it under 120 words total. Use "you" not third person. No markdown formattin
   }) {
     final insights = <WellnessInsight>[];
 
+    // Always first — works with 3+ entries
+    final summary = generateMoodSummaryInsight(moodEntries);
+    if (summary != null) insights.add(summary);
+
     final sleep = generateSleepMoodInsight(moodEntries);
     if (sleep != null) insights.add(sleep);
 
     final dow = generateDayOfWeekInsight(moodEntries);
     if (dow != null) insights.add(dow);
 
-    final journaling = generateJournalingImpactInsight(moodEntries, journalEntries);
+    final journaling =
+        generateJournalingImpactInsight(moodEntries, journalEntries);
     if (journaling != null) insights.add(journaling);
 
     final predictive = generatePredictiveSuggestion(moodEntries);

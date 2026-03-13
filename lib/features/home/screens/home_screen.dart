@@ -25,7 +25,7 @@ final _completedChallengesProvider = StateProvider<Set<String>>((ref) => {});
 
 final _insightsProvider = Provider.autoDispose<List<WellnessInsight>>((ref) {
   final moodState = ref.watch(moodProvider);
-  if (moodState.entries.isEmpty) return [];
+  if (moodState.entries.length < 3) return [];
   return InsightsService(apiKey: '').generateStaticInsights(
     moodEntries: moodState.entries,
     journalEntries: moodState.journalEntries,
@@ -1275,7 +1275,7 @@ class _InsightsRow extends ConsumerWidget {
               ),
             ),
             const Spacer(),
-            if (moodState.entries.length < 7)
+            if (moodState.entries.length < 3)
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1443,7 +1443,7 @@ class _InsightsEmpty extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Log ${7 - entryCount.clamp(0, 7)} more moods to see personalized patterns and AI-powered insights.',
+                  'Log ${3 - entryCount.clamp(0, 3)} more mood${(3 - entryCount.clamp(0, 3)) == 1 ? '' : 's'} to unlock personalized insights.',
                   style: const TextStyle(
                     fontFamily: 'Nunito',
                     fontSize: 12,
