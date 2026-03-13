@@ -1,19 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/providers/auth_provider.dart';
+import '../../../core/providers/mood_provider.dart';
 
-class ResourcesScreen extends StatefulWidget {
+class ResourcesScreen extends ConsumerStatefulWidget {
   const ResourcesScreen({super.key});
 
   @override
-  State<ResourcesScreen> createState() => _ResourcesScreenState();
+  ConsumerState<ResourcesScreen> createState() => _ResourcesScreenState();
 }
 
-class _ResourcesScreenState extends State<ResourcesScreen> {
+class _ResourcesScreenState extends ConsumerState<ResourcesScreen>
+    with SingleTickerProviderStateMixin {
   String _selectedCategory = 'All';
   final Set<int> _bookmarked = {};
+  late TabController _tabCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabCtrl = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabCtrl.dispose();
+    super.dispose();
+  }
 
   static const List<String> _categories = [
     'All',
@@ -45,7 +62,7 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
       'emoji': '💙',
       'readTime': '12 min',
       'isHot': false,
-      'color': 0xFF6366F1,
+      'color': 0xFF00BEB4,
     },
     {
       'title': 'Sleep Hygiene for Students',
@@ -55,7 +72,7 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
       'emoji': '😴',
       'readTime': '6 min',
       'isHot': false,
-      'color': 0xFF8B5CF6,
+      'color': 0xFF0EA5E9,
     },
     {
       'title': 'Imposter Syndrome: You Belong Here',
@@ -119,6 +136,8 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
   @override
   Widget build(BuildContext context) {
     final filtered = _filteredResources;
+    final moodState = ref.watch(moodProvider);
+    final authState = ref.watch(authProvider);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
@@ -128,7 +147,7 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
           elevation: 0,
           centerTitle: false,
           title: const Text(
-            'Resource Library',
+            'Resources',
             style: TextStyle(
               fontFamily: 'Nunito',
               fontWeight: FontWeight.w800,
@@ -142,8 +161,39 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
               onPressed: () {},
             ),
           ],
+          bottom: TabBar(
+            controller: _tabCtrl,
+            labelColor: AppColors.primary,
+            unselectedLabelColor: AppColors.textMuted,
+            indicatorColor: AppColors.primary,
+            indicatorWeight: 2.5,
+            labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+            tabs: const [Tab(text: '✨ For You'), Tab(text: '📚 Library')],
+          ),
         ),
-        body: Column(
+        body: TabBarView(
+          controller: _tabCtrl,
+          children: [
+            // ─── For You Tab ──────────────────────────────
+            _ForYouTab(
+              resources: _resources,
+              bookmarked: _bookmarked,
+              moodState: moodState,
+              goals: authState.user?.goals ?? [],
+              onBookmark: (idx) {
+                HapticFeedback.selectionClick();
+                setState(() {
+                  if (_bookmarked.contains(idx)) {
+                    _bookmarked.remove(idx);
+                  } else {
+                    _bookmarked.add(idx);
+                  }
+                });
+              },
+            ),
+            // ─── Library Tab (existing) ───────────────────
+            Column(
           children: [
             // ─── Category Filter ──────────────────────────
             Container(
@@ -223,7 +273,181 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
               ),
             ),
           ],
+        ), // end Library Column
+          ], // end TabBarView children
+        ), // end TabBarView
+      ),
+    );
+  }
+}
+
+// ─── For You Tab ──────────────────────────────────────────
+
+class _ForYouTab extends StatelessWidget {
+  final List<Map<String, dynamic>> resources;
+  final Set<int> bookmarked;
+  final MoodState moodState;
+  final List<String> goals;
+  final ValueChanged<int> onBookmark;
+
+  const _ForYouTab({
+    required this.resources,
+    required this.bookmarked,
+    required this.moodState,
+    required this.goals,
+    required this.onBookmark,
+  });
+
+  // Smart recommendation: pick resources that match the user's current state
+  List<Map<String, dynamic>> _recommended() {
+    final todayMood = moodState.todayEntry?.moodScore ?? 5;
+    final todayEmotions = moodState.todayEntry?.emotions ?? [];
+    final goalCategories = goals.map((g) {
+      if (g.contains('anxiety')) return 'Anxiety';
+      if (g.contains('depression') || g.contains('motivation')) return 'Depression';
+      if (g.contains('stress') || g.contains('academic')) return 'Stress';
+      if (g.contains('sleep')) return 'Sleep';
+      if (g.contains('social') || g.contains('relationship')) return 'Relationships';
+      if (g.contains('selfesteem') || g.contains('self')) return 'Self-Esteem';
+      return null;
+    }).whereType<String>().toSet();
+
+    return resources.where((r) {
+      final cat = r['category'] as String;
+      if (cat == 'Crisis' && todayMood <= 2) return true;
+      if (todayMood <= 4 && ['Anxiety', 'Depression', 'Stress'].contains(cat)) return true;
+      if (todayEmotions.any((e) => ['anxious', 'stressed', 'overwhelmed']
+          .contains(e.toLowerCase())) && cat == 'Anxiety') return true;
+      if (todayEmotions.any((e) => ['tired', 'low energy', 'sluggish']
+          .contains(e.toLowerCase())) && cat == 'Sleep') return true;
+      if (goalCategories.contains(cat)) return true;
+      if (r['isHot'] == true) return true;
+      return false;
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final recs = _recommended();
+    final allRecs = recs.isEmpty ? resources.where((r) => r['isHot'] == true).toList() : recs;
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+      children: [
+        // ─── Campus Resource Card ─────────────────────
+        _CampusResourceCard().animate().fadeIn(duration: 400.ms),
+        const SizedBox(height: 16),
+
+        // ─── Personalized picks header ────────────────
+        Row(children: [
+          const Text('✨', style: TextStyle(fontSize: 16)),
+          const SizedBox(width: 6),
+          const Expanded(
+            child: Text(
+              'Picked for you',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          if (moodState.todayEntry != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Based on today',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+        ]),
+        const SizedBox(height: 12),
+
+        ...allRecs.asMap().entries.map((e) {
+          final r = e.value;
+          final idx = resources.indexOf(r);
+          return _ResourceCard(
+            resource: r,
+            isBookmarked: bookmarked.contains(idx),
+            onBookmark: () => onBookmark(idx),
+          ).animate().fadeIn(delay: (e.key * 60).ms).slideY(begin: 0.1);
+        }),
+      ],
+    );
+  }
+}
+
+// ─── Campus Resource Card ─────────────────────────────────
+
+class _CampusResourceCard extends StatelessWidget {
+  const _CampusResourceCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF006B64), Color(0xFF00BEB4)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          const Text('🏫', style: TextStyle(fontSize: 30)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Campus Mental Health Center',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Free counseling, crisis walk-ins, and peer support — available to all students',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: Colors.white.withOpacity(0.8),
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white.withOpacity(0.3)),
+            ),
+            child: const Text(
+              'Find',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

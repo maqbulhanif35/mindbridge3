@@ -168,7 +168,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String password,
     String? university,
     int? yearOfStudy,
+    String? faculty,
     List<String>? goals,
+    List<String>? stressors,
+    String mayaPersonality = 'warm',
+    String checkInTime = 'any',
+    String therapyExperience = 'never',
   }) async {
     final normalizedEmail = email.trim().toLowerCase();
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
@@ -193,26 +198,30 @@ class AuthNotifier extends StateNotifier<AuthState> {
         name: name.trim(),
         university: university,
         yearOfStudy: yearOfStudy,
+        faculty: faculty,
         goals: goals ?? [],
+        stressors: stressors ?? [],
+        mayaPersonality: mayaPersonality,
+        checkInTime: checkInTime,
+        therapyExperience: therapyExperience,
         createdAt: DateTime.now(),
       );
       await SupabaseService.upsertProfile(profile);
 
-      // If session is null, Supabase sent a verification email
-      if (response.session == null) {
+      // Email confirmation is disabled in this project → immediate session
+      if (response.session != null) {
+        state = state.copyWith(
+          status: AuthStatus.authenticated,
+          user: profile,
+          clearError: true,
+        );
+      } else {
+        // Email confirmation enabled — wait for user to confirm
         state = state.copyWith(
           status: AuthStatus.pendingVerification,
           pendingEmail: normalizedEmail,
         );
-        return true;
       }
-
-      // Email confirmation disabled in Supabase → immediate session
-      state = state.copyWith(
-        status: AuthStatus.authenticated,
-        user: profile,
-        clearError: true,
-      );
       return true;
     } on sb.AuthException catch (e) {
       state = state.copyWith(
@@ -231,13 +240,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   // ─── Email Verification ───────────────────────────────
 
-  /// Resend the confirmation email. Returns false with error set on rate limit.
+  /// Resend OTP email via Supabase auth.
   Future<bool> resendVerificationEmail() async {
     final email = state.pendingEmail;
     if (email == null) return false;
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
     try {
-      await SupabaseService.resendVerificationEmail(email);
+      await SupabaseService.sendOtpEmail(email);
       state = state.copyWith(status: AuthStatus.pendingVerification);
       return true;
     } on sb.AuthException catch (e) {
@@ -309,7 +318,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (email == null) return false;
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
     try {
-      final response = await SupabaseService.verifyOtp(
+      final response = await SupabaseService.verifyEmailOtp(
         email: email,
         token: code,
       );
@@ -323,12 +332,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
       await _loadProfile(user.id);
       return true;
-    } on sb.AuthException catch (e) {
-      state = state.copyWith(
-        status: AuthStatus.pendingVerification,
-        errorMessage: _humanizeAuthError(e),
-      );
-      return false;
     } catch (_) {
       state = state.copyWith(
         status: AuthStatus.pendingVerification,

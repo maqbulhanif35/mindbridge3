@@ -117,6 +117,37 @@ class SupabaseService {
     return List<Map<String, dynamic>>.from(data);
   }
 
+  /// Stores a 2-3 sentence AI-generated summary for a session.
+  static Future<void> updateSessionSummary(
+      String sessionId, String summary) async {
+    try {
+      await _db
+          .from('chat_sessions')
+          .update({'summary': summary, 'updated_at': DateTime.now().toIso8601String()})
+          .eq('id', sessionId);
+    } catch (_) {}
+  }
+
+  /// Returns the [limit] most recent non-null session summaries for a user.
+  static Future<List<String>> getRecentSummaries(String userId,
+      {int limit = 3}) async {
+    try {
+      final data = await _db
+          .from('chat_sessions')
+          .select('summary')
+          .eq('user_id', userId)
+          .not('summary', 'is', null)
+          .order('updated_at', ascending: false)
+          .limit(limit);
+      return (data as List)
+          .map((e) => e['summary'] as String? ?? '')
+          .where((s) => s.isNotEmpty)
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   // ─── Mood logs ─────────────────────────────────────────
 
   static Future<Map<String, dynamic>> logMood({
@@ -185,4 +216,21 @@ class SupabaseService {
   static Future<void> deleteJournalEntry(String entryId) async {
     await _db.from('journal_entries').delete().eq('id', entryId);
   }
+
+  // ─── OTP via Supabase Auth email ───────────────────────
+
+  /// Sends a 6-digit OTP to [email] using Supabase's own email delivery.
+  static Future<void> sendOtpEmail(String email) =>
+      _auth.signInWithOtp(email: email, shouldCreateUser: false);
+
+  /// Verifies the 6-digit [token] for [email] (type = email OTP).
+  static Future<sb.AuthResponse> verifyEmailOtp({
+    required String email,
+    required String token,
+  }) =>
+      _auth.verifyOTP(
+        email: email,
+        token: token,
+        type: sb.OtpType.email,
+      );
 }

@@ -44,15 +44,37 @@ abstract class AppRoutes {
   static const String verifyEmail = '/verify-email';
 }
 
+// ─── Auth Listenable ──────────────────────────────────────
+// Wraps AuthState in a ChangeNotifier so GoRouter can refresh
+// without recreating the entire router on every state change.
+
+class _AuthListenable extends ChangeNotifier {
+  AuthState _state;
+  _AuthListenable(this._state);
+
+  AuthState get state => _state;
+
+  void update(AuthState newState) {
+    _state = newState;
+    notifyListeners();
+  }
+}
+
 // ─── Router Provider ──────────────────────────────────────
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authProvider);
+  final listenable = _AuthListenable(ref.read(authProvider));
+
+  // Listen for auth changes and notify GoRouter — does NOT recreate the router
+  ref.listen<AuthState>(authProvider, (_, next) => listenable.update(next));
+  ref.onDispose(listenable.dispose);
 
   return GoRouter(
     initialLocation: AppRoutes.splash,
     debugLogDiagnostics: false,
+    refreshListenable: listenable,
     redirect: (context, state) {
+      final authState = listenable.state;
       final status = authState.status;
       final isLoading =
           status == AuthStatus.loading || status == AuthStatus.initial;
@@ -63,7 +85,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isOnSplash = location == AppRoutes.splash;
       final isOnVerify = location == AppRoutes.verifyEmail;
       final isOnOnboarding = location == AppRoutes.onboarding;
-      // Onboarding is NOT in this set — it's a post-auth screen
       final isOnAuthPage = location == AppRoutes.login ||
           location == AppRoutes.register;
 
@@ -79,9 +100,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Verified user on verify screen — move along
       if (isAuthenticated && isOnVerify) return AppRoutes.home;
 
-      // Not authenticated — redirect to login (also kick off onboarding if not authed)
-      if (!isAuthenticated && !isPendingVerification &&
-          !isOnAuthPage) {
+      // Not authenticated — redirect to login
+      if (!isAuthenticated && !isPendingVerification && !isOnAuthPage) {
         return AppRoutes.login;
       }
 

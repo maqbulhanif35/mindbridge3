@@ -19,8 +19,8 @@ final _steps = [
   ),
   _StepMeta(
     icon: Icons.school_rounded,
-    title: 'Your University',
-    subtitle: 'Helps us personalize your experience',
+    title: 'Your Academic Life',
+    subtitle: 'Helps Maya understand your world',
     colors: [Color(0xFF006B64), AppColors.primary, Color(0xFF0EA5E9)],
     accent: AppColors.primary,
   ),
@@ -30,6 +30,20 @@ final _steps = [
     subtitle: "Tell Maya what you're working on",
     colors: [AppColors.primaryDark, AppColors.primary, Color(0xFF10B981)],
     accent: AppColors.tertiary,
+  ),
+  _StepMeta(
+    icon: Icons.bolt_rounded,
+    title: 'Current Stressors',
+    subtitle: "What's weighing on you right now?",
+    colors: [Color(0xFF7C2D12), Color(0xFFEA580C), Color(0xFFF59E0B)],
+    accent: AppColors.secondary,
+  ),
+  _StepMeta(
+    icon: Icons.psychology_rounded,
+    title: "Personalise Maya",
+    subtitle: 'Make her feel like yours',
+    colors: [Color(0xFF1A0533), Color(0xFF6C3FC7), Color(0xFF00BEB4)],
+    accent: AppColors.primary,
   ),
 ];
 
@@ -48,11 +62,11 @@ class _StepMeta {
   });
 }
 
-// ─── Goal options ─────────────────────────────────────────
+// ─── Option data ──────────────────────────────────────────
 
 const _kGoals = [
   {'id': 'anxiety', 'label': 'Manage Anxiety', 'emoji': '😌'},
-  {'id': 'depression', 'label': 'Cope with Depression', 'emoji': '💙'},
+  {'id': 'depression', 'label': 'Cope with Low Mood', 'emoji': '💙'},
   {'id': 'stress', 'label': 'Academic Stress', 'emoji': '📚'},
   {'id': 'sleep', 'label': 'Better Sleep', 'emoji': '😴'},
   {'id': 'social', 'label': 'Social Confidence', 'emoji': '🤝'},
@@ -63,7 +77,18 @@ const _kGoals = [
   {'id': 'relationships', 'label': 'Relationships', 'emoji': '❤️'},
 ];
 
-// ─── Year options ─────────────────────────────────────────
+const _kStressors = [
+  {'id': 'exams', 'label': 'Exams & Deadlines', 'emoji': '📝'},
+  {'id': 'finances', 'label': 'Financial Pressure', 'emoji': '💰'},
+  {'id': 'loneliness', 'label': 'Loneliness', 'emoji': '🌧️'},
+  {'id': 'family', 'label': 'Family Issues', 'emoji': '🏠'},
+  {'id': 'relationships_stress', 'label': 'Relationship Stress', 'emoji': '💔'},
+  {'id': 'career', 'label': 'Career / Future', 'emoji': '🎯'},
+  {'id': 'identity', 'label': 'Identity & Purpose', 'emoji': '🔍'},
+  {'id': 'health', 'label': 'Physical Health', 'emoji': '🏥'},
+  {'id': 'performance', 'label': 'Performance Anxiety', 'emoji': '😰'},
+  {'id': 'time', 'label': 'Time Management', 'emoji': '⏰'},
+];
 
 const _kYears = [
   {'label': 'Freshman', 'sub': '1st year', 'icon': Icons.looks_one_rounded, 'value': 1},
@@ -74,12 +99,40 @@ const _kYears = [
   {'label': 'Graduate', 'sub': 'Masters/PhD', 'icon': Icons.school_rounded, 'value': 6},
 ];
 
-// ─── Breakpoints helper ───────────────────────────────────
+const _kFaculties = [
+  'Engineering & Technology',
+  'Medicine & Health Sciences',
+  'Business & Economics',
+  'Arts & Humanities',
+  'Natural Sciences',
+  'Law',
+  'Education',
+  'Architecture & Design',
+  'Social Sciences',
+  'Computer Science',
+  'Mathematics & Statistics',
+  'Other',
+];
+
+const _kCheckInTimes = [
+  {'id': 'morning', 'label': 'Morning', 'sub': 'Start the day grounded', 'emoji': '🌅'},
+  {'id': 'afternoon', 'label': 'Afternoon', 'sub': 'Midday check-in', 'emoji': '☀️'},
+  {'id': 'evening', 'label': 'Evening', 'sub': 'Reflect on the day', 'emoji': '🌙'},
+  {'id': 'any', 'label': 'Any Time', 'sub': "I'll decide each day", 'emoji': '🔄'},
+];
+
+const _kTherapyExp = [
+  {'id': 'never', 'label': 'First time', 'sub': "I've never used mental health tools", 'emoji': '🌱'},
+  {'id': 'apps', 'label': 'Used apps before', 'sub': "I've tried wellness apps", 'emoji': '📱'},
+  {'id': 'therapy', 'label': 'In / had therapy', 'sub': 'Professional support experience', 'emoji': '🛋️'},
+];
+
+// ─── Responsive helpers ───────────────────────────────────
 
 extension _Resp on BuildContext {
   double get sw => MediaQuery.of(this).size.width;
   bool get isMobile => sw < 600;
-  double get cardMaxWidth => isMobile ? double.infinity : 460.0;
+  double get cardMaxWidth => isMobile ? double.infinity : 480.0;
 }
 
 // ─── Main screen ──────────────────────────────────────────
@@ -94,6 +147,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     with SingleTickerProviderStateMixin {
   final _pageCtrl = PageController();
   int _step = 0;
+  static const _kTotalSteps = 5;
 
   // Step 1 fields
   final _nameCtrl = TextEditingController();
@@ -108,9 +162,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   // Step 2 fields
   final _uniCtrl = TextEditingController();
   int? _selectedYear;
+  String? _selectedFaculty;
 
   // Step 3 fields
   final Set<String> _selectedGoals = {};
+
+  // Step 4 fields
+  final Set<String> _selectedStressors = {};
+
+  // Step 5 fields
+  String _mayaPersonality = 'warm';
+  String _checkInTime = 'any';
+  String _therapyExperience = 'never';
 
   String? _errorMsg;
 
@@ -177,11 +240,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
   void _nextStep() {
     if (_step == 0 && !_validateStep1()) return;
-    if (_step < 2) {
-      setState(() {
-        _step++;
-        _errorMsg = null;
-      });
+    if (_step == 2 && _selectedGoals.isEmpty) {
+      setState(() => _errorMsg = 'Pick at least one goal');
+      return;
+    }
+    setState(() => _errorMsg = null);
+
+    if (_step < _kTotalSteps - 1) {
+      setState(() => _step++);
       _pageCtrl.animateToPage(
         _step,
         duration: const Duration(milliseconds: 400),
@@ -209,20 +275,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   }
 
   Future<void> _submit() async {
-    if (_selectedGoals.isEmpty) {
-      setState(() => _errorMsg = 'Please select at least one goal');
-      return;
-    }
     setState(() => _errorMsg = null);
     final ok = await ref.read(authProvider.notifier).register(
           name: _nameCtrl.text.trim(),
           email: _emailCtrl.text.trim(),
           password: _passCtrl.text,
-          university: _uniCtrl.text.trim().isEmpty
-              ? null
-              : _uniCtrl.text.trim(),
+          university: _uniCtrl.text.trim().isEmpty ? null : _uniCtrl.text.trim(),
           yearOfStudy: _selectedYear,
+          faculty: _selectedFaculty,
           goals: _selectedGoals.toList(),
+          stressors: _selectedStressors.toList(),
+          mayaPersonality: _mayaPersonality,
+          checkInTime: _checkInTime,
+          therapyExperience: _therapyExperience,
         );
     if (!ok || !mounted) return;
     final auth = ref.read(authProvider);
@@ -247,6 +312,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     return 'Strong 💪';
   }
 
+  // Heights per step to avoid overflow
+  double get _stepHeight {
+    switch (_step) {
+      case 0: return 420;
+      case 1: return 480;
+      case 2: return 380;
+      case 3: return 360;
+      case 4: return 460;
+      default: return 400;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final meta = _steps[_step];
@@ -260,7 +337,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
         body: Stack(
           children: [
             _MeshBg(accent: meta.accent),
-
             SafeArea(
               child: Center(
                 child: SingleChildScrollView(
@@ -269,13 +345,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                     vertical: 16,
                   ),
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                        maxWidth: context.cardMaxWidth),
+                    constraints: BoxConstraints(maxWidth: context.cardMaxWidth),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _buildHeader(meta, context),
-                        _buildWhiteCard(meta, auth, err, context),
+                        _buildHeader(meta),
+                        _buildWhiteCard(meta, auth, err),
                         const SizedBox(height: 16),
                       ],
                     ),
@@ -291,7 +366,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
   // ─── Header ──────────────────────────────────────────────
 
-  Widget _buildHeader(_StepMeta meta, BuildContext context) {
+  Widget _buildHeader(_StepMeta meta) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
       decoration: BoxDecoration(
@@ -317,23 +392,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
-                    _step == 0
-                        ? Icons.close_rounded
-                        : Icons.arrow_back_rounded,
+                    _step == 0 ? Icons.close_rounded : Icons.arrow_back_rounded,
                     color: Colors.white, size: 18,
                   ),
                 ),
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.20),
                   borderRadius: BorderRadius.circular(50),
                 ),
                 child: Text(
-                  'Step ${_step + 1} of 3',
+                  'Step ${_step + 1} of $_kTotalSteps',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12,
@@ -343,9 +415,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
               ),
             ],
           ),
-
           const SizedBox(height: 14),
-
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
             child: Container(
@@ -354,48 +424,35 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.20),
                 shape: BoxShape.circle,
-                border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.35), width: 1.5),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.35), width: 1.5),
               ),
               child: Icon(meta.icon, color: Colors.white, size: 24),
             ),
           ),
-
           const SizedBox(height: 10),
-
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 250),
             child: Column(
               key: ValueKey('t$_step'),
               children: [
-                Text(
-                  meta.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+                Text(meta.title,
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 18,
+                        fontWeight: FontWeight.w800, letterSpacing: -0.3),
+                    textAlign: TextAlign.center),
                 const SizedBox(height: 3),
-                Text(
-                  meta.subtitle,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.80),
-                    fontSize: 12,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+                Text(meta.subtitle,
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.80), fontSize: 12),
+                    textAlign: TextAlign.center),
               ],
             ),
           ),
-
           const SizedBox(height: 12),
-
+          // Progress dots
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(3, (i) {
+            children: List.generate(_kTotalSteps, (i) {
               final active = i == _step;
               final done = i < _step;
               return AnimatedContainer(
@@ -417,10 +474,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     );
   }
 
-  // ─── White card ──────────────────────────────────────────
+  // ─── White card ───────────────────────────────────────────
 
-  Widget _buildWhiteCard(
-      _StepMeta meta, AuthState auth, String? err, BuildContext context) {
+  Widget _buildWhiteCard(_StepMeta meta, AuthState auth, String? err) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -445,12 +501,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
             child: Column(
               children: [
-                SizedBox(
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 350),
+                  curve: Curves.easeInOut,
                   height: _stepHeight,
                   child: PageView(
                     controller: _pageCtrl,
@@ -468,17 +525,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                         strengthLabel: _strengthLabel,
                         avatarInitials: _avatarInitials,
                         accent: meta.accent,
-                        onTogglePass: () =>
-                            setState(() => _obscurePass = !_obscurePass),
-                        onToggleConfirm: () => setState(
-                            () => _obscureConfirm = !_obscureConfirm),
+                        onTogglePass: () => setState(() => _obscurePass = !_obscurePass),
+                        onToggleConfirm: () => setState(() => _obscureConfirm = !_obscureConfirm),
                       ),
                       _Step2(
                         uniCtrl: _uniCtrl,
                         selectedYear: _selectedYear,
+                        selectedFaculty: _selectedFaculty,
                         accent: meta.accent,
-                        onYearSelected: (v) =>
-                            setState(() => _selectedYear = v),
+                        onYearSelected: (v) => setState(() => _selectedYear = v),
+                        onFacultySelected: (v) => setState(() => _selectedFaculty = v),
                       ),
                       _Step3(
                         selected: _selectedGoals,
@@ -491,108 +547,115 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                           }
                         }),
                       ),
+                      _Step4(
+                        selected: _selectedStressors,
+                        accent: meta.accent,
+                        onToggle: (id) => setState(() {
+                          if (_selectedStressors.contains(id)) {
+                            _selectedStressors.remove(id);
+                          } else {
+                            _selectedStressors.add(id);
+                          }
+                        }),
+                      ),
+                      _Step5(
+                        personality: _mayaPersonality,
+                        checkInTime: _checkInTime,
+                        therapyExperience: _therapyExperience,
+                        accent: meta.accent,
+                        onPersonalityChanged: (v) => setState(() => _mayaPersonality = v),
+                        onCheckInTimeChanged: (v) => setState(() => _checkInTime = v),
+                        onTherapyExpChanged: (v) => setState(() => _therapyExperience = v),
+                      ),
                     ],
                   ),
                 ),
 
                 if (err != null) ...[
-                  const SizedBox(height: 10),
-                  _ErrBanner(message: err),
-                ],
-
-                const SizedBox(height: 14),
-
-                _GlowButton(
-                  label: _step == 2 ? 'Create My Account' : 'Continue',
-                  icon: _step == 2
-                      ? Icons.check_circle_outline_rounded
-                      : Icons.arrow_forward_rounded,
-                  onTap: _nextStep,
-                  isLoading: auth.isLoading,
-                  accent: meta.accent,
-                ),
-
-                const SizedBox(height: 12),
-
-                GestureDetector(
-                  onTap: () => context.go(AppRoutes.login),
-                  child: RichText(
-                    text: const TextSpan(
-                      style: TextStyle(
-                          fontSize: 13, color: AppColors.textSecondary),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.error.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
                       children: [
-                        TextSpan(text: 'Already have an account? '),
-                        TextSpan(
-                          text: 'Sign in →',
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        Icon(Icons.error_outline_rounded,
+                            color: AppColors.error, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(err,
+                              style: TextStyle(
+                                  color: AppColors.error, fontSize: 13)),
                         ),
                       ],
                     ),
                   ),
+                ],
+
+                const SizedBox(height: 16),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: auth.isLoading ? null : _nextStep,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: meta.accent,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: auth.isLoading
+                        ? const SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : Text(
+                            _step < _kTotalSteps - 1 ? 'Continue' : 'Create My Account',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 16),
+                          ),
+                  ),
                 ),
+
+                if (_step == 0) ...[
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text('Already have an account? ',
+                          style: TextStyle(
+                              color: AppColors.textSecondary, fontSize: 13)),
+                      GestureDetector(
+                        onTap: () => context.go(AppRoutes.login),
+                        child: Text('Sign in',
+                            style: TextStyle(
+                                color: meta.accent,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                    ],
+                  ),
+                ],
+
+                if (_step >= 1 && _step < _kTotalSteps - 1) ...[
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: _nextStep,
+                    child: Text('Skip for now',
+                        style: TextStyle(
+                            color: AppColors.textMuted, fontSize: 13)),
+                  ),
+                ],
               ],
             ),
           ),
         ],
       ),
-    );
-  }
-
-  double get _stepHeight {
-    switch (_step) {
-      case 0:
-        return 490;
-      case 1:
-        return 370;
-      case 2:
-        return 370;
-      default:
-        return 400;
-    }
-  }
-}
-
-// ─── Mesh background ──────────────────────────────────────
-
-class _MeshBg extends StatelessWidget {
-  final Color accent;
-  const _MeshBg({required this.accent});
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF006B64),
-                Color(0xFF009E95),
-                Color(0xFF004E49),
-              ],
-            ),
-          ),
-        ),
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 500),
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment.topCenter,
-              radius: 1.2,
-              colors: [
-                accent.withValues(alpha: 0.38),
-                accent.withValues(alpha: 0),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -634,276 +697,195 @@ class _Step1 extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Center(
             child: Container(
-              width: 60, height: 60,
+              width: 64, height: 64,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
                 gradient: LinearGradient(
-                  colors: [accent, accent.withValues(alpha: 0.6)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+                  colors: [accent, accent.withValues(alpha: 0.7)],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: accent.withValues(alpha: 0.35),
-                    blurRadius: 14,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
+                shape: BoxShape.circle,
               ),
               child: Center(
-                child: Text(
-                  avatarInitials,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+                child: Text(avatarInitials,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800)),
               ),
             ),
-          ).animate().scale(
-              begin: const Offset(0.5, 0.5),
-              duration: 400.ms,
-              curve: Curves.easeOutBack),
-
-          const SizedBox(height: 14),
-
-          _RegField(
-            controller: nameCtrl,
-            label: 'Full Name',
-            icon: Icons.badge_outlined,
-            accent: accent,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.next,
-          ).animate().fadeIn(delay: 80.ms).slideY(begin: 0.12),
-
-          const SizedBox(height: 9),
-
-          _RegField(
-            controller: emailCtrl,
-            label: 'Email address',
-            icon: Icons.alternate_email_rounded,
-            accent: accent,
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.next,
-          ).animate().fadeIn(delay: 120.ms).slideY(begin: 0.12),
-
-          const SizedBox(height: 9),
-
-          _RegField(
-            controller: passCtrl,
-            label: 'Password',
-            icon: Icons.lock_outline_rounded,
-            accent: accent,
-            isPassword: true,
-            obscure: obscurePass,
-            onToggle: onTogglePass,
-            textInputAction: TextInputAction.next,
-          ).animate().fadeIn(delay: 160.ms).slideY(begin: 0.12),
-
+          ),
+          const SizedBox(height: 16),
+          _Field(label: 'Full Name', ctrl: nameCtrl, hint: 'Your name', accent: accent),
+          const SizedBox(height: 12),
+          _Field(label: 'Email', ctrl: emailCtrl, hint: 'uni@example.com',
+              keyboardType: TextInputType.emailAddress, accent: accent),
+          const SizedBox(height: 12),
+          _Field(
+            label: 'Password', ctrl: passCtrl, hint: '••••••••',
+            obscure: obscurePass, accent: accent,
+            suffix: IconButton(
+              icon: Icon(obscurePass ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+                  size: 18, color: AppColors.textMuted),
+              onPressed: onTogglePass,
+            ),
+          ),
           if (passCtrl.text.isNotEmpty) ...[
-            const SizedBox(height: 5),
+            const SizedBox(height: 6),
             Row(
               children: [
                 Expanded(
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(3),
+                    borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
                       value: passStrength,
-                      minHeight: 4,
                       backgroundColor: AppColors.border,
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(strengthColor),
+                      valueColor: AlwaysStoppedAnimation(strengthColor),
+                      minHeight: 4,
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  strengthLabel,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: strengthColor,
-                  ),
-                ),
+                Text(strengthLabel,
+                    style: TextStyle(
+                        fontSize: 11, color: strengthColor,
+                        fontWeight: FontWeight.w600)),
               ],
             ),
           ],
-
-          const SizedBox(height: 9),
-
-          _RegField(
-            controller: confirmCtrl,
-            label: 'Confirm Password',
-            icon: Icons.lock_outline_rounded,
-            accent: accent,
-            isPassword: true,
-            obscure: obscureConfirm,
-            onToggle: onToggleConfirm,
-            textInputAction: TextInputAction.done,
-          ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.12),
-
-          const SizedBox(height: 10),
-
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.primaryContainer,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                  color: AppColors.border, width: 1),
+          const SizedBox(height: 12),
+          _Field(
+            label: 'Confirm Password', ctrl: confirmCtrl, hint: '••••••••',
+            obscure: obscureConfirm, accent: accent,
+            suffix: IconButton(
+              icon: Icon(obscureConfirm ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+                  size: 18, color: AppColors.textMuted),
+              onPressed: onToggleConfirm,
             ),
-            child: Row(
-              children: [
-                Icon(Icons.shield_outlined, size: 13, color: accent),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(
-                    'Your data is encrypted end-to-end. We never share your information.',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textMuted,
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ).animate().fadeIn(delay: 240.ms),
+          ),
         ],
       ),
     );
   }
 }
 
-// ─── Step 2: University ───────────────────────────────────
+// ─── Step 2: Academic Info ────────────────────────────────
 
 class _Step2 extends StatelessWidget {
   final TextEditingController uniCtrl;
   final int? selectedYear;
+  final String? selectedFaculty;
   final Color accent;
   final ValueChanged<int> onYearSelected;
+  final ValueChanged<String?> onFacultySelected;
 
   const _Step2({
     required this.uniCtrl,
     required this.selectedYear,
+    required this.selectedFaculty,
     required this.accent,
     required this.onYearSelected,
+    required this.onFacultySelected,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _RegField(
-          controller: uniCtrl,
-          label: 'University / College',
-          icon: Icons.account_balance_outlined,
-          accent: accent,
-          textCapitalization: TextCapitalization.words,
-          textInputAction: TextInputAction.done,
-        ).animate().fadeIn(delay: 50.ms),
-
-        const SizedBox(height: 14),
-
-        Text(
-          'Year of Study',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textSecondary,
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _Field(
+            label: 'University / College',
+            ctrl: uniCtrl,
+            hint: 'e.g. University of Cape Town',
+            accent: accent,
           ),
-        ),
-        const SizedBox(height: 8),
+          const SizedBox(height: 16),
 
-        Expanded(
-          child: GridView.count(
+          // Faculty dropdown
+          Text('Field of Study',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary)),
+          const SizedBox(height: 6),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surfaceVariant,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: selectedFaculty,
+                hint: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Text('Select your faculty',
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 14)),
+                ),
+                isExpanded: true,
+                borderRadius: BorderRadius.circular(12),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                items: _kFaculties
+                    .map((f) => DropdownMenuItem(
+                          value: f,
+                          child: Text(f, style: const TextStyle(fontSize: 14)),
+                        ))
+                    .toList(),
+                onChanged: onFacultySelected,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+          Text('Year of Study',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary)),
+          const SizedBox(height: 8),
+          GridView.count(
             crossAxisCount: 3,
+            shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 7,
-            mainAxisSpacing: 7,
-            childAspectRatio: 1.55,
-            children: List.generate(_kYears.length, (i) {
-              final y = _kYears[i];
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 2.2,
+            children: _kYears.map((y) {
               final val = y['value'] as int;
-              final isSel = selectedYear == val;
+              final active = selectedYear == val;
               return GestureDetector(
                 onTap: () => onYearSelected(val),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   decoration: BoxDecoration(
-                    color: isSel
-                        ? accent.withValues(alpha: 0.10)
-                        : AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(11),
+                    color: active ? accent.withValues(alpha: 0.12) : AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: isSel ? accent : AppColors.border,
-                      width: isSel ? 2 : 1.5,
+                      color: active ? accent : AppColors.border,
+                      width: active ? 1.5 : 1,
                     ),
-                    boxShadow: isSel
-                        ? [
-                            BoxShadow(
-                              color: accent.withValues(alpha: 0.18),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            )
-                          ]
-                        : null,
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        y['icon'] as IconData,
-                        size: 16,
-                        color: isSel ? accent : AppColors.textMuted,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        y['label'] as String,
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: isSel
-                              ? accent
-                              : AppColors.textSecondary,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      Text(
-                        y['sub'] as String,
-                        style: TextStyle(
-                          fontSize: 8,
-                          color: AppColors.textMuted,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
+                      Text(y['label'] as String,
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: active ? accent : AppColors.textPrimary)),
+                      Text(y['sub'] as String,
+                          style: TextStyle(
+                              fontSize: 9, color: AppColors.textMuted)),
                     ],
                   ),
                 ),
               );
-            }),
+            }).toList(),
           ),
-        ),
-
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Icon(Icons.info_outline_rounded,
-                size: 12, color: AppColors.textMuted),
-            const SizedBox(width: 5),
-            Text(
-              'Optional — you can always update this later.',
-              style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-            ),
-          ],
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -926,331 +908,419 @@ class _Step3 extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              'What brings you here?',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const Spacer(),
-            if (selected.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [
-                    accent,
-                    accent.withValues(alpha: 0.7)
-                  ]),
-                  borderRadius: BorderRadius.circular(50),
-                ),
-                child: Text(
-                  '${selected.length} selected',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
+        Text('Select all that apply',
+            style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+        const SizedBox(height: 10),
         Expanded(
           child: GridView.count(
             crossAxisCount: 2,
-            crossAxisSpacing: 7,
-            mainAxisSpacing: 7,
-            childAspectRatio: 2.5,
-            children: List.generate(_kGoals.length, (i) {
-              final g = _kGoals[i];
+            shrinkWrap: false,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 3.0,
+            children: _kGoals.map((g) {
               final id = g['id'] as String;
-              final isSel = selected.contains(id);
+              final active = selected.contains(id);
               return GestureDetector(
                 onTap: () => onToggle(id),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   decoration: BoxDecoration(
-                    gradient: isSel
-                        ? LinearGradient(
-                            colors: [
-                              accent,
-                              accent.withValues(alpha: 0.75)
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                        : null,
-                    color: isSel ? null : AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(11),
+                    color: active ? accent.withValues(alpha: 0.12) : AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color:
-                          isSel ? accent : AppColors.border,
-                      width: 1.5,
+                      color: active ? accent : AppColors.border,
+                      width: active ? 1.5 : 1,
                     ),
                   ),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 7),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
                   child: Row(
                     children: [
-                      Text(g['emoji'] as String,
-                          style: const TextStyle(fontSize: 16)),
+                      Text(g['emoji'] as String, style: const TextStyle(fontSize: 16)),
                       const SizedBox(width: 6),
                       Expanded(
-                        child: Text(
-                          g['label'] as String,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: isSel
-                                ? Colors.white
-                                : AppColors.textSecondary,
-                          ),
-                        ),
+                        child: Text(g['label'] as String,
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: active ? accent : AppColors.textPrimary),
+                            overflow: TextOverflow.ellipsis),
                       ),
-                      if (isSel)
-                        const Icon(Icons.check_circle_rounded,
-                            size: 13, color: Colors.white),
                     ],
                   ),
-                ).animate(delay: (i * 35).ms).fadeIn(duration: 280.ms),
+                ),
               );
-            }),
+            }).toList(),
           ),
         ),
-
-        if (selected.isEmpty) ...[
-          const SizedBox(height: 5),
-          Row(
-            children: [
-              Icon(Icons.tips_and_updates_outlined,
-                  size: 12, color: AppColors.textMuted),
-              const SizedBox(width: 5),
-              Text(
-                'Pick at least one to personalize Maya for you.',
-                style:
-                    TextStyle(fontSize: 11, color: AppColors.textMuted),
-              ),
-            ],
-          ),
-        ],
       ],
     );
   }
 }
 
-// ─── Shared: Register text field ─────────────────────────
+// ─── Step 4: Stressors ────────────────────────────────────
 
-class _RegField extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  final IconData icon;
+class _Step4 extends StatelessWidget {
+  final Set<String> selected;
   final Color accent;
-  final bool isPassword;
-  final bool? obscure;
-  final VoidCallback? onToggle;
-  final TextInputType? keyboardType;
-  final TextInputAction? textInputAction;
-  final TextCapitalization textCapitalization;
+  final ValueChanged<String> onToggle;
 
-  const _RegField({
-    required this.controller,
-    required this.label,
-    required this.icon,
+  const _Step4({
+    required this.selected,
     required this.accent,
-    this.isPassword = false,
-    this.obscure,
-    this.onToggle,
-    this.keyboardType,
-    this.textInputAction,
-    this.textCapitalization = TextCapitalization.none,
+    required this.onToggle,
   });
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      obscureText: isPassword ? (obscure ?? true) : false,
-      keyboardType: keyboardType,
-      textInputAction: textInputAction,
-      textCapitalization: textCapitalization,
-      style: const TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.w500,
-        color: AppColors.textPrimary,
-      ),
-      decoration: InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: AppColors.surfaceVariant,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(13),
-          borderSide:
-              const BorderSide(color: AppColors.border, width: 1.5),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: accent, width: 2),
-        ),
-        prefixIcon: Container(
-          margin: const EdgeInsets.all(9),
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: accent.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: accent, size: 15),
-        ),
-        suffixIcon: isPassword
-            ? IconButton(
-                onPressed: onToggle,
-                icon: Icon(
-                  (obscure ?? true)
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  size: 17,
-                  color: AppColors.textMuted,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("Maya will remember this to support you better",
+            style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+        const SizedBox(height: 10),
+        Expanded(
+          child: GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: false,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 3.0,
+            children: _kStressors.map((s) {
+              final id = s['id'] as String;
+              final active = selected.contains(id);
+              return GestureDetector(
+                onTap: () => onToggle(id),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  decoration: BoxDecoration(
+                    color: active
+                        ? accent.withValues(alpha: 0.12)
+                        : AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: active ? accent : AppColors.border,
+                      width: active ? 1.5 : 1,
+                    ),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Row(
+                    children: [
+                      Text(s['emoji'] as String, style: const TextStyle(fontSize: 16)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(s['label'] as String,
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: active ? accent : AppColors.textPrimary),
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                    ],
+                  ),
                 ),
-              )
-            : null,
-        contentPadding: const EdgeInsets.symmetric(
-            horizontal: 14, vertical: 13),
-      ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
     );
   }
 }
 
-// ─── Shared: Glow button ─────────────────────────────────
+// ─── Step 5: Personalise Maya ─────────────────────────────
 
-class _GlowButton extends StatelessWidget {
-  final String label;
-  final IconData? icon;
-  final VoidCallback onTap;
-  final bool isLoading;
-  final Color? accent;
+class _Step5 extends StatelessWidget {
+  final String personality;
+  final String checkInTime;
+  final String therapyExperience;
+  final Color accent;
+  final ValueChanged<String> onPersonalityChanged;
+  final ValueChanged<String> onCheckInTimeChanged;
+  final ValueChanged<String> onTherapyExpChanged;
 
-  const _GlowButton({
-    required this.label,
-    this.icon,
-    required this.onTap,
-    this.isLoading = false,
-    this.accent,
+  const _Step5({
+    required this.personality,
+    required this.checkInTime,
+    required this.therapyExperience,
+    required this.accent,
+    required this.onPersonalityChanged,
+    required this.onCheckInTimeChanged,
+    required this.onTherapyExpChanged,
   });
+
+  static const _personalities = [
+    {'id': 'warm', 'label': 'Warm & Supportive', 'sub': 'Gentle, empathetic, nurturing', 'emoji': '🤗'},
+    {'id': 'direct', 'label': 'Direct & Practical', 'sub': 'Straight talk, clear advice', 'emoji': '🎯'},
+    {'id': 'playful', 'label': 'Light & Playful', 'sub': 'Uplifting, light-hearted', 'emoji': '✨'},
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final base = accent ?? AppColors.primary;
-    return GestureDetector(
-      onTap: isLoading ? null : onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        height: 50,
-        decoration: BoxDecoration(
-          gradient: isLoading
-              ? LinearGradient(colors: [
-                  base.withValues(alpha: 0.55),
-                  base.withValues(alpha: 0.55),
-                ])
-              : LinearGradient(
-                  colors: [
-                    HSLColor.fromColor(base)
-                        .withLightness(
-                            (HSLColor.fromColor(base).lightness - 0.08)
-                                .clamp(0, 1))
-                        .toColor(),
-                    base,
-                    HSLColor.fromColor(base)
-                        .withLightness(
-                            (HSLColor.fromColor(base).lightness + 0.10)
-                                .clamp(0, 1))
-                        .toColor(),
-                  ],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                ),
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: isLoading
-              ? null
-              : [
-                  BoxShadow(
-                    color: base.withValues(alpha: 0.38),
-                    blurRadius: 14,
-                    offset: const Offset(0, 6),
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Maya personality
+          _SectionLabel("Maya's Communication Style"),
+          const SizedBox(height: 8),
+          ..._personalities.map((p) {
+            final id = p['id'] as String;
+            final active = personality == id;
+            return GestureDetector(
+              onTap: () => onPersonalityChanged(id),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: active ? accent.withValues(alpha: 0.10) : AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: active ? accent : AppColors.border,
+                    width: active ? 1.5 : 1,
                   ),
-                ],
-        ),
-        child: Center(
-          child: isLoading
-              ? const SizedBox(
-                  width: 20, height: 20,
-                  child: CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2.5))
-              : Row(
-                  mainAxisSize: MainAxisSize.min,
+                ),
+                child: Row(
                   children: [
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.2,
+                    Text(p['emoji'] as String, style: const TextStyle(fontSize: 20)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(p['label'] as String,
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: active ? accent : AppColors.textPrimary)),
+                          Text(p['sub'] as String,
+                              style: TextStyle(
+                                  fontSize: 11, color: AppColors.textMuted)),
+                        ],
                       ),
                     ),
-                    if (icon != null) ...[
-                      const SizedBox(width: 7),
-                      Icon(icon, color: Colors.white, size: 16),
-                    ],
+                    if (active)
+                      Icon(Icons.check_circle_rounded, color: accent, size: 18),
                   ],
                 ),
-        ),
+              ),
+            );
+          }),
+
+          const SizedBox(height: 14),
+
+          // Check-in time
+          _SectionLabel('Preferred Check-in Time'),
+          const SizedBox(height: 8),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 2.8,
+            children: _kCheckInTimes.map((t) {
+              final id = t['id'] as String;
+              final active = checkInTime == id;
+              return GestureDetector(
+                onTap: () => onCheckInTimeChanged(id),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  decoration: BoxDecoration(
+                    color: active ? accent.withValues(alpha: 0.10) : AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: active ? accent : AppColors.border,
+                      width: active ? 1.5 : 1,
+                    ),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Row(
+                    children: [
+                      Text(t['emoji'] as String, style: const TextStyle(fontSize: 16)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(t['label'] as String,
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: active ? accent : AppColors.textPrimary)),
+                            Text(t['sub'] as String,
+                                style: TextStyle(
+                                    fontSize: 9, color: AppColors.textMuted),
+                                overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+
+          const SizedBox(height: 14),
+
+          // Therapy experience
+          _SectionLabel('Experience with Mental Health Support'),
+          const SizedBox(height: 8),
+          ..._kTherapyExp.map((e) {
+            final id = e['id'] as String;
+            final active = therapyExperience == id;
+            return GestureDetector(
+              onTap: () => onTherapyExpChanged(id),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: active ? accent.withValues(alpha: 0.10) : AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: active ? accent : AppColors.border,
+                    width: active ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Text(e['emoji'] as String, style: const TextStyle(fontSize: 18)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(e['label'] as String,
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: active ? accent : AppColors.textPrimary)),
+                          Text(e['sub'] as String,
+                              style: TextStyle(
+                                  fontSize: 11, color: AppColors.textMuted)),
+                        ],
+                      ),
+                    ),
+                    if (active)
+                      Icon(Icons.check_circle_rounded, color: accent, size: 18),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
 }
 
-// ─── Shared: Error banner ────────────────────────────────
+// ─── Section label helper ─────────────────────────────────
 
-class _ErrBanner extends StatelessWidget {
-  final String message;
-  const _ErrBanner({required this.message});
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) => Text(
+        text,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textPrimary,
+        ),
+      );
+}
+
+// ─── Reusable field ───────────────────────────────────────
+
+class _Field extends StatelessWidget {
+  final String label;
+  final TextEditingController ctrl;
+  final String hint;
+  final bool obscure;
+  final TextInputType keyboardType;
+  final Widget? suffix;
+  final Color accent;
+
+  const _Field({
+    required this.label,
+    required this.ctrl,
+    required this.hint,
+    required this.accent,
+    this.obscure = false,
+    this.keyboardType = TextInputType.text,
+    this.suffix,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.errorContainer,
-        borderRadius: BorderRadius.circular(10),
-        border:
-            Border.all(color: AppColors.error.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline_rounded,
-              color: AppColors.error, size: 15),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                color: AppColors.error,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: TextStyle(
                 fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary)),
+        const SizedBox(height: 5),
+        TextField(
+          controller: ctrl,
+          obscureText: obscure,
+          keyboardType: keyboardType,
+          style: TextStyle(fontSize: 14, color: AppColors.textPrimary),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 14),
+            filled: true,
+            fillColor: AppColors.surfaceVariant,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.border),
             ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: accent, width: 1.5),
+            ),
+            suffixIcon: suffix,
           ),
-        ],
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Mesh background ──────────────────────────────────────
+
+class _MeshBg extends StatelessWidget {
+  final Color accent;
+  const _MeshBg({required this.accent});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.expand(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              accent.withValues(alpha: 0.15),
+              Colors.white,
+              accent.withValues(alpha: 0.05),
+            ],
+          ),
+        ),
       ),
-    ).animate().shake(duration: 350.ms).fadeIn();
+    );
   }
 }

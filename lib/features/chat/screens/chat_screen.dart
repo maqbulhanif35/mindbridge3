@@ -22,6 +22,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _ctrl = TextEditingController();
   final ScrollController _scroll = ScrollController();
   final FocusNode _focus = FocusNode();
+  bool _justListenMode = false;
+  bool _showQuickReplies = true;
 
   @override
   void dispose() {
@@ -41,13 +43,67 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  Future<void> _send() async {
-    final text = _ctrl.text.trim();
+  List<String> _getQuickReplies(List msgs) {
+    if (msgs.isEmpty) {
+      return [
+        "I'm feeling anxious 😰",
+        "I can't sleep 😴",
+        "Just want to vent 💬",
+        "Stressed about exams 📚",
+        "Feeling lonely 💙",
+      ];
+    }
+    // Get last message content for context
+    final last = msgs.last;
+    final isLastFromUser = last.isFromUser;
+    if (isLastFromUser) {
+      return [
+        "What should I do?",
+        "Is this normal?",
+        "Let's try an exercise",
+        "I need more support",
+      ];
+    }
+    final content = last.content.toLowerCase();
+    if (content.contains('breath') || content.contains('exercise') || content.contains('practice')) {
+      return ["Try it now", "Not right now", "Tell me more", "That sounds helpful"];
+    }
+    if (content.contains('journal') || content.contains('write') || content.contains('reflect')) {
+      return ["I'll try journaling", "Help me start", "Tell me more", "Not right now"];
+    }
+    return ["That helps, thanks 💚", "Tell me more", "I need more support", "Let's try something"];
+  }
+
+  void _showNavigationSheet() {
+    HapticFeedback.lightImpact();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _NavSheet(
+        onNavigate: (route) {
+          Navigator.pop(context);
+          context.push(route);
+        },
+      ),
+    );
+  }
+
+  Future<void> _send([String? prefilled]) async {
+    final text = (prefilled ?? _ctrl.text).trim();
     if (text.isEmpty) return;
     _ctrl.clear();
+    setState(() => _showQuickReplies = false);
     _focus.requestFocus();
-    await ref.read(chatProvider.notifier).sendMessage(text);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    // Prepend listen-mode context if active
+    final finalText = _justListenMode
+        ? '[Just listen mode - please only validate and reflect, do not give advice] $text'
+        : text;
+    await ref.read(chatProvider.notifier).sendMessage(finalText);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
+      if (mounted) setState(() => _showQuickReplies = true);
+    });
   }
 
   @override
@@ -61,6 +117,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
     });
 
+    final quickReplies = _getQuickReplies(chatState.messages);
+    final hasMessages = chatState.messages.isNotEmpty || chatState.streamingContent != null;
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
@@ -69,9 +128,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           children: [
             _ChatHeader(
               streamState: chatState.streamState,
-              onNewChat: () =>
-                  ref.read(chatProvider.notifier).startNewSession(),
+              justListenMode: _justListenMode,
+              messageCount: chatState.messages.length,
+              onNewChat: () {
+                ref.read(chatProvider.notifier).startNewSession();
+                setState(() => _showQuickReplies = true);
+              },
               onCrisis: () => context.push(AppRoutes.crisis),
+              onToggleListenMode: () =>
+                  setState(() => _justListenMode = !_justListenMode),
+              onNavigate: _showNavigationSheet,
             ),
 
             // Crisis banner
@@ -84,17 +150,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
             // Messages
             Expanded(
-              child: chatState.messages.isEmpty &&
-                      chatState.streamingContent == null
+              child: !hasMessages
                   ? _EmptyState(
-                      onSuggestionTap: (s) {
-                        _ctrl.text = s;
-                        _send();
-                      },
+                      onSuggestionTap: (s) => _send(s),
                     )
                   : _MessageList(
                       chatState: chatState,
                       scrollController: _scroll,
+                      onExerciseTap: () =>
+                          context.push(AppRoutes.breathing),
                     ),
             ),
 
@@ -106,12 +170,49 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ref.read(chatProvider.notifier).clearError(),
               ),
 
+            // Just-listen mode banner
+            if (_justListenMode)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                color: AppColors.primaryContainer,
+                child: Row(
+                  children: [
+                    const Icon(LucideIcons.ear, size: 14, color: AppColors.primary),
+                    const SizedBox(width: 6),
+                    const Expanded(
+                      child: Text(
+                        'Just listening mode — Maya will only validate, not advise',
+                        style: TextStyle(
+                          fontFamily: 'Nunito',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primaryDark,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => setState(() => _justListenMode = false),
+                      child: const Icon(LucideIcons.x, size: 14, color: AppColors.primary),
+                    ),
+                  ],
+                ),
+              ),
+
+            // Quick reply chips (when not loading and has context)
+            if (_showQuickReplies && !chatState.isMayaResponding)
+              _QuickReplyChips(
+                replies: quickReplies,
+                onTap: (reply) => _send(reply),
+              ).animate().fadeIn(duration: 200.ms),
+
             // Input
             _ChatInput(
               controller: _ctrl,
               focusNode: _focus,
-              onSend: _send,
+              onSend: () => _send(),
               isLoading: chatState.isMayaResponding,
+              justListenMode: _justListenMode,
             ),
           ],
         ),
@@ -124,13 +225,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
 class _ChatHeader extends StatelessWidget {
   final MayaStreamState streamState;
+  final bool justListenMode;
+  final int messageCount;
   final VoidCallback onNewChat;
   final VoidCallback onCrisis;
+  final VoidCallback onToggleListenMode;
+  final VoidCallback onNavigate;
 
   const _ChatHeader({
     required this.streamState,
+    required this.justListenMode,
+    required this.messageCount,
     required this.onNewChat,
     required this.onCrisis,
+    required this.onToggleListenMode,
+    required this.onNavigate,
   });
 
   String get _statusText => switch (streamState) {
@@ -248,6 +357,19 @@ class _ChatHeader extends StatelessWidget {
 
               // Actions
               _HeaderBtn(
+                icon: LucideIcons.layoutGrid,
+                onTap: onNavigate,
+                tooltip: 'Navigate',
+              ),
+              const SizedBox(width: Spacing.xs),
+              _HeaderBtn(
+                icon: justListenMode ? LucideIcons.ear : LucideIcons.earOff,
+                onTap: onToggleListenMode,
+                tooltip: justListenMode ? 'Exit listen mode' : 'Just listen mode',
+                color: justListenMode ? const Color(0xFFFFD166) : Colors.white,
+              ),
+              const SizedBox(width: Spacing.xs),
+              _HeaderBtn(
                 icon: LucideIcons.squarePen,
                 onTap: onNewChat,
                 tooltip: 'New Chat',
@@ -306,10 +428,12 @@ class _HeaderBtn extends StatelessWidget {
 class _MessageList extends StatelessWidget {
   final ChatState chatState;
   final ScrollController scrollController;
+  final VoidCallback onExerciseTap;
 
   const _MessageList({
     required this.chatState,
     required this.scrollController,
+    required this.onExerciseTap,
   });
 
   @override
@@ -343,8 +467,9 @@ class _MessageList extends StatelessWidget {
         final msg = messages[i];
         return _MessageBubble(
           message: msg,
-          isFirstInGroup:
-              i == 0 || messages[i - 1].role != msg.role,
+          isFirstInGroup: i == 0 || messages[i - 1].role != msg.role,
+          isLast: i == messages.length - 1,
+          onExerciseTap: onExerciseTap,
         );
       },
     );
@@ -356,11 +481,23 @@ class _MessageList extends StatelessWidget {
 class _MessageBubble extends StatelessWidget {
   final MessageModel message;
   final bool isFirstInGroup;
+  final bool isLast;
+  final VoidCallback onExerciseTap;
 
   const _MessageBubble({
     required this.message,
     required this.isFirstInGroup,
+    this.isLast = false,
+    required this.onExerciseTap,
   });
+
+  bool get _suggestsExercise {
+    final c = message.content.toLowerCase();
+    return !message.isFromUser &&
+        (c.contains('breath') || c.contains('box breathing') ||
+            c.contains('4-7-8') || c.contains('mindful') ||
+            c.contains('try this exercise') || c.contains('calming technique'));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -407,13 +544,15 @@ class _MessageBubble extends StatelessWidget {
             ),
           GestureDetector(
             onLongPress: () {
+              HapticFeedback.mediumImpact();
               Clipboard.setData(ClipboardData(text: message.content));
-              HapticFeedback.lightImpact();
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Copied to clipboard'),
-                  duration: Duration(seconds: 2),
+                SnackBar(
+                  content: const Text('Copied to clipboard'),
+                  duration: const Duration(seconds: 2),
                   behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
               );
             },
@@ -463,7 +602,101 @@ class _MessageBubble extends StatelessWidget {
               .animate()
               .fadeIn(duration: 250.ms)
               .slideY(begin: 0.15, end: 0, curve: Curves.easeOutCubic),
+
+          // Inline exercise card
+          if (_suggestsExercise)
+            _InlineExerciseCard(onTap: onExerciseTap)
+                .animate()
+                .fadeIn(delay: 300.ms)
+                .slideY(begin: 0.2),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Inline Exercise Card ─────────────────────────────────
+
+class _InlineExerciseCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _InlineExerciseCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(top: 8, right: 64),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF009E95), Color(0xFF00BEB4)],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withOpacity(0.25),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Center(
+                child: Text('🌬️', style: TextStyle(fontSize: 22)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Try a breathing exercise',
+                    style: TextStyle(
+                      fontFamily: 'Nunito',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                  Text(
+                    '4-7-8 breathing · 2 min',
+                    style: TextStyle(
+                      fontFamily: 'Nunito',
+                      fontSize: 11,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.25),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'Start →',
+                style: TextStyle(
+                  fontFamily: 'Nunito',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -753,6 +986,58 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
+// ─── Quick Reply Chips ────────────────────────────────────
+
+class _QuickReplyChips extends StatelessWidget {
+  final List<String> replies;
+  final ValueChanged<String> onTap;
+
+  const _QuickReplyChips({required this.replies, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    if (replies.isEmpty) return const SizedBox.shrink();
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: context.tokenSurface,
+        border: Border(top: BorderSide(color: context.tokenBorder)),
+      ),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        itemCount: replies.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          return GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              onTap(replies[i]);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: AppColors.primary.withOpacity(0.25)),
+              ),
+              child: Text(
+                replies[i],
+                style: const TextStyle(
+                  fontFamily: 'Nunito',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 // ─── Chat Input ───────────────────────────────────────────
 
 class _ChatInput extends StatelessWidget {
@@ -760,12 +1045,14 @@ class _ChatInput extends StatelessWidget {
   final FocusNode focusNode;
   final VoidCallback onSend;
   final bool isLoading;
+  final bool justListenMode;
 
   const _ChatInput({
     required this.controller,
     required this.focusNode,
     required this.onSend,
     required this.isLoading,
+    this.justListenMode = false,
   });
 
   @override
@@ -800,7 +1087,9 @@ class _ChatInput extends StatelessWidget {
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => onSend(),
                   decoration: InputDecoration(
-                    hintText: AppStrings.chatPlaceholder,
+                    hintText: justListenMode
+                        ? 'Share freely — Maya will just listen...'
+                        : AppStrings.chatPlaceholder,
                     hintStyle: TextStyle(
                       color: context.tokenTextMuted,
                       fontSize: 15,
@@ -1000,6 +1289,237 @@ class _CrisisBanner extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Navigation Sheet ─────────────────────────────────────
+
+class _NavSheet extends StatelessWidget {
+  final ValueChanged<String> onNavigate;
+  const _NavSheet({required this.onNavigate});
+
+  static const _destinations = [
+    _NavDest(icon: LucideIcons.house, label: 'Home', route: AppRoutes.home, color: AppColors.primary),
+    _NavDest(icon: LucideIcons.heart, label: 'Mood Check-in', route: AppRoutes.moodTracker, color: Color(0xFFFF6B6B)),
+    _NavDest(icon: LucideIcons.chartBar, label: 'Mood Analytics', route: AppRoutes.moodAnalytics, color: Color(0xFF0EA5E9)),
+    _NavDest(icon: LucideIcons.bookOpen, label: 'Journal', route: AppRoutes.journal, color: Color(0xFFF59E0B)),
+    _NavDest(icon: LucideIcons.wind, label: 'Mindfulness', route: AppRoutes.mindfulness, color: Color(0xFF10B981)),
+    _NavDest(icon: LucideIcons.activity, label: 'Wellness Hub', route: AppRoutes.wellness, color: Color(0xFF06D6A0)),
+    _NavDest(icon: LucideIcons.library, label: 'Resources', route: AppRoutes.resources, color: Color(0xFFF59E0B)),
+    _NavDest(icon: LucideIcons.users, label: 'Community', route: AppRoutes.community, color: Color(0xFF0EA5E9)),
+    _NavDest(icon: LucideIcons.userRound, label: 'Profile & Settings', route: AppRoutes.profile, color: AppColors.primary),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.only(top: 12, bottom: 20),
+            decoration: BoxDecoration(
+              color: AppColors.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [AppColors.primaryDark, AppColors.primary],
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(LucideIcons.layoutGrid, size: 18, color: Colors.white),
+                ),
+                const SizedBox(width: 12),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Navigate',
+                      style: TextStyle(
+                        fontFamily: 'Nunito',
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      'Jump to any section of the app',
+                      style: TextStyle(
+                        fontFamily: 'Nunito',
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: Divider(color: AppColors.border),
+          ),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: GridView.count(
+                crossAxisCount: 3,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 0.95,
+                children: _destinations.map((d) => _NavGridItem(
+                  dest: d,
+                  onTap: () => onNavigate(d.route),
+                )).toList(),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+            child: GestureDetector(
+              onTap: () => onNavigate(AppRoutes.crisis),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withOpacity(0.07),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                ),
+                child: const Row(
+                  children: [
+                    _CrisisIconBox(),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Crisis Support',
+                            style: TextStyle(
+                              fontFamily: 'Nunito',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.error,
+                            ),
+                          ),
+                          Text(
+                            'Immediate help & hotlines',
+                            style: TextStyle(
+                              fontFamily: 'Nunito',
+                              fontSize: 12,
+                              color: AppColors.error,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(LucideIcons.chevronRight, color: AppColors.error, size: 18),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+}
+
+class _CrisisIconBox extends StatelessWidget {
+  const _CrisisIconBox();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: AppColors.error.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Icon(LucideIcons.phoneCall, color: AppColors.error, size: 20),
+    );
+  }
+}
+
+class _NavDest {
+  final IconData icon;
+  final String label;
+  final String route;
+  final Color color;
+  const _NavDest({
+    required this.icon,
+    required this.label,
+    required this.route,
+    required this.color,
+  });
+}
+
+class _NavGridItem extends StatelessWidget {
+  final _NavDest dest;
+  final VoidCallback onTap;
+  const _NavGridItem({required this.dest, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: dest.color.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: dest.color.withOpacity(0.2)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: dest.color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(dest.icon, color: dest.color, size: 22),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              dest.label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              style: const TextStyle(
+                fontFamily: 'Nunito',
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+                height: 1.3,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

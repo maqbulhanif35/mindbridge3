@@ -85,6 +85,27 @@ class MindfulnessScreen extends ConsumerWidget {
 
                   const SizedBox(height: 24),
 
+                  // ─── Quick Rescue (Micro-exercises) ──
+                  const _SectionTitle(
+                    title: 'Quick Rescue',
+                    subtitle: '30 sec — 2 min resets for any moment',
+                  ).animate().fadeIn(delay: 150.ms),
+
+                  const SizedBox(height: 12),
+
+                  _MicroExerciseRow()
+                      .animate()
+                      .fadeIn(delay: 170.ms),
+
+                  const SizedBox(height: 24),
+
+                  // ─── Daily Sequence ───────────────────
+                  _DailySequenceCard()
+                      .animate()
+                      .fadeIn(delay: 140.ms),
+
+                  const SizedBox(height: 24),
+
                   // ─── Breathing Exercises ──────────────
                   const _SectionTitle(
                     title: 'Breathing Exercises',
@@ -257,7 +278,7 @@ class MindfulnessScreen extends ConsumerWidget {
       title: '5-4-3-2-1 Method',
       description: 'Use your 5 senses to anchor yourself to the present.',
       emoji: '✋',
-      color: Color(0xFF8B5CF6),
+      color: AppColors.tertiary,
       steps: [
         '5 things you can SEE right now',
         '4 things you can TOUCH right now',
@@ -1693,6 +1714,196 @@ class _GroundingDetailSheetState extends State<_GroundingDetailSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+// ─── Micro-Exercise Row ────────────────────────────────────────────────
+
+const _kMicroExercises = [
+  {'duration': '30s', 'title': 'Box Breath', 'desc': 'In 4 - Hold 4 - Out 4 - Hold 4', 'emoji': '📦', 'color': Color(0xFF0EA5E9)},
+  {'duration': '60s', 'title': 'Cold Splash', 'desc': 'Calm your nervous system fast', 'emoji': '💧', 'color': Color(0xFF00BEB4)},
+  {'duration': '2 min', 'title': '5-4-3-2-1', 'desc': 'Ground with your 5 senses', 'emoji': '✋', 'color': AppColors.tertiary},
+  {'duration': '2 min', 'title': 'Power Pose', 'desc': 'Stand wide, breathe deep, reset', 'emoji': '🦸', 'color': Color(0xFFF59E0B)},
+];
+
+class _MicroExerciseRow extends StatelessWidget {
+  const _MicroExerciseRow();
+
+  void _showDetail(BuildContext context, Map ex) {
+    final color = ex['color'] as Color;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 20),
+            Row(children: [
+              Text(ex['emoji'] as String, style: const TextStyle(fontSize: 36)),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(ex['title'] as String, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
+                  child: Text(ex['duration'] as String, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                ),
+              ])),
+            ]),
+            const SizedBox(height: 14),
+            Text(ex['desc'] as String, style: const TextStyle(fontSize: 15, color: AppColors.textSecondary, height: 1.5)),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                child: const Text('Got it', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 120,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.zero,
+        itemCount: _kMicroExercises.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (_, i) {
+          final ex = _kMicroExercises[i];
+          final color = ex['color'] as Color;
+          return GestureDetector(
+            onTap: () => _showDetail(context, ex),
+            child: Container(
+              width: 130, padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.25))),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Text(ex['emoji'] as String, style: const TextStyle(fontSize: 18)),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
+                    child: Text(ex['duration'] as String, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
+                  ),
+                ]),
+                const SizedBox(height: 8),
+                Text(ex['title'] as String, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
+                const SizedBox(height: 2),
+                Text(ex['desc'] as String, style: const TextStyle(fontSize: 10.5, color: AppColors.textMuted, height: 1.3)),
+              ]),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─── Daily Sequence Card ────────────────────────────────────────────────
+
+class _DailySequenceCard extends StatelessWidget {
+  const _DailySequenceCard();
+
+  static List<Map<String, dynamic>> _buildSequence() {
+    final h = DateTime.now().hour;
+    if (h < 12) {
+      return [
+        {'emoji': '🌅', 'label': 'Morning breath', 'sub': '4-7-8 3min', 'color': Color(0xFF0EA5E9)},
+        {'emoji': '🧠', 'label': 'Set intention', 'sub': 'One word today', 'color': AppColors.tertiary},
+        {'emoji': '✍', 'label': 'Gratitude', 'sub': 'Journal 2min', 'color': Color(0xFF00BEB4)},
+      ];
+    } else if (h < 17) {
+      return [
+        {'emoji': '📦', 'label': 'Box breathing', 'sub': '4-4-4-4 2min', 'color': Color(0xFF0EA5E9)},
+        {'emoji': '🚶', 'label': 'Mindful walk', 'sub': '5 min outside', 'color': Color(0xFF10B981)},
+        {'emoji': '📝', 'label': 'One win', 'sub': 'Quick note', 'color': Color(0xFFF59E0B)},
+      ];
+    } else {
+      return [
+        {'emoji': '🌬', 'label': 'Unwind breath', 'sub': 'Physiological sigh', 'color': AppColors.primary},
+        {'emoji': '🧘', 'label': 'Body scan', 'sub': 'Release tension', 'color': AppColors.tertiary},
+        {'emoji': '🌙', 'label': 'Sleep prep', 'sub': 'Progressive relax', 'color': Color(0xFF1D4ED8)},
+      ];
+    }
+  }
+
+  static String _seqTitle() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Morning sequence';
+    if (h < 17) return 'Afternoon reset';
+    return 'Evening wind-down';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final steps = _buildSequence();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [Color(0xFF011A19), Color(0xFF012D2B)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Text('✨', style: TextStyle(fontSize: 16)),
+            const SizedBox(width: 7),
+            Text(_seqTitle(), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.3), borderRadius: BorderRadius.circular(6)),
+              child: const Text('~10 min', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white)),
+            ),
+          ]),
+          const SizedBox(height: 14),
+          Row(
+            children: steps.asMap().entries.map((e) {
+              final s = e.value;
+              final isLast = e.key == steps.length - 1;
+              final c = s['color'] as Color;
+              return Expanded(
+                child: Row(children: [
+                  Expanded(child: Column(children: [
+                    Container(
+                      width: 44, height: 44,
+                      decoration: BoxDecoration(color: c.withOpacity(0.2), shape: BoxShape.circle, border: Border.all(color: c.withOpacity(0.5))),
+                      child: Center(child: Text(s['emoji'] as String, style: const TextStyle(fontSize: 18))),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(s['label'] as String, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white), textAlign: TextAlign.center),
+                    Text(s['sub'] as String, style: TextStyle(fontSize: 9.5, color: Colors.white.withOpacity(0.5)), textAlign: TextAlign.center),
+                  ])),
+                  if (!isLast)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 28),
+                      child: Icon(LucideIcons.arrowRight, size: 14, color: Colors.white.withOpacity(0.3)),
+                    ),
+                ]),
+              );
+            }).toList(),
+          ),
+        ],
       ),
     );
   }

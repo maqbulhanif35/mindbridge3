@@ -7,7 +7,9 @@ import 'package:intl/intl.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/streak_model.dart';
+import '../../../core/models/daily_article_model.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/providers/daily_content_provider.dart';
 import '../../../core/providers/mood_provider.dart';
 import '../../../core/providers/streak_provider.dart';
 import '../../../core/providers/crisis_escalation_provider.dart';
@@ -98,6 +100,13 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
 
+                  // ─── Exam Season Banner ──────────────────
+                  if (_ExamBanner.isExamSeason())
+                    const SliverPadding(
+                      padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      sliver: SliverToBoxAdapter(child: _ExamBanner()),
+                    ),
+
                   // ─── Maya Message Card (HERO) ────────────
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -108,6 +117,16 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
+
+                  // ─── 5-Min Rescue (when no check-in or low mood) ──
+                  if (moodState.todayEntry == null ||
+                      (moodState.todayEntry?.moodScore ?? 10) <= 4)
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      sliver: SliverToBoxAdapter(
+                        child: _FiveMinRescue(moodState: moodState),
+                      ),
+                    ),
 
                   // ─── At-a-Glance Stats ───────────────────
                   SliverPadding(
@@ -158,6 +177,14 @@ class HomeScreen extends ConsumerWidget {
                     padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
                     sliver: SliverToBoxAdapter(
                       child: _ChallengesSection(),
+                    ),
+                  ),
+
+                  // ─── For You Today ───────────────────────
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+                    sliver: SliverToBoxAdapter(
+                      child: _ForYouSection(),
                     ),
                   ),
 
@@ -727,7 +754,7 @@ class _QuickActionsGrid extends StatelessWidget {
     _QGrid(
       icon: LucideIcons.penLine,
       label: 'Journal',
-      color: Color(0xFF8B5CF6),
+      color: AppColors.tertiary,
       route: AppRoutes.journal,
     ),
     _QGrid(
@@ -748,6 +775,24 @@ class _QuickActionsGrid extends StatelessWidget {
       color: Color(0xFFFF6B6B),
       route: AppRoutes.community,
     ),
+    _QGrid(
+      icon: LucideIcons.activity,
+      label: 'Wellness',
+      color: Color(0xFF06D6A0),
+      route: AppRoutes.wellness,
+    ),
+    _QGrid(
+      icon: LucideIcons.library,
+      label: 'Resources',
+      color: Color(0xFFF59E0B),
+      route: AppRoutes.resources,
+    ),
+    _QGrid(
+      icon: LucideIcons.userRound,
+      label: 'Profile',
+      color: AppColors.primary,
+      route: AppRoutes.profile,
+    ),
   ];
 
   @override
@@ -756,7 +801,9 @@ class _QuickActionsGrid extends StatelessWidget {
       children: [
         _buildRow(context, _actions.take(3).toList(), 0),
         const SizedBox(height: 10),
-        _buildRow(context, _actions.skip(3).toList(), 3),
+        _buildRow(context, _actions.skip(3).take(3).toList(), 3),
+        const SizedBox(height: 10),
+        _buildRow(context, _actions.skip(6).toList(), 6),
       ],
     );
   }
@@ -1129,7 +1176,7 @@ class _WellnessSummaryCard extends ConsumerWidget {
             ...[
               ('Mood', breakdown.moodComponent, const Color(0xFF06D6A0)),
               ('Consistency', breakdown.consistencyComponent, AppColors.primary),
-              ('Sleep', breakdown.sleepComponent, const Color(0xFF8B5CF6)),
+              ('Sleep', breakdown.sleepComponent, const Color(0xFF0EA5E9)),
             ].map(
               (c) => Padding(
                 padding: const EdgeInsets.only(bottom: 9),
@@ -1199,7 +1246,7 @@ class _InsightsRow extends ConsumerWidget {
 
   Color _colorFor(InsightType type) => switch (type) {
         InsightType.correlation => const Color(0xFF0EA5E9),
-        InsightType.pattern => const Color(0xFF8B5CF6),
+        InsightType.pattern => AppColors.tertiary,
         InsightType.prediction => const Color(0xFFF59E0B),
         InsightType.weeklyReport => AppColors.primary,
         InsightType.recommendation => const Color(0xFF10B981),
@@ -1433,7 +1480,7 @@ class _ChallengesSection extends ConsumerWidget {
       title: 'Write in Your Journal',
       subtitle: '3 min · Reflect on your day',
       category: 'Journal',
-      categoryColor: Color(0xFF8B5CF6),
+      categoryColor: AppColors.tertiary,
       xp: 75,
       route: AppRoutes.journalEntry,
     ),
@@ -1844,5 +1891,752 @@ class _ChallengeTile extends StatelessWidget {
         .animate()
         .fadeIn(delay: Duration(milliseconds: delay), duration: 400.ms)
         .slideY(begin: 0.1, end: 0, curve: Curves.easeOutCubic);
+  }
+}
+
+// ─── Exam Season Banner ───────────────────────────────────
+
+class _ExamBanner extends StatelessWidget {
+  const _ExamBanner();
+
+  /// Show during typical exam seasons: Mar–Apr and Nov–Dec
+  static bool isExamSeason() {
+    final m = DateTime.now().month;
+    return m == 3 || m == 4 || m == 11 || m == 12;
+  }
+
+  static String _label() {
+    final m = DateTime.now().month;
+    if (m == 3 || m == 4) return 'Spring exam season is here.';
+    return 'Fall exam season is here.';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFF3CD), Color(0xFFFFF8E1)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: const Color(0xFFF59E0B).withOpacity(0.35), width: 1),
+      ),
+      child: Row(
+        children: [
+          const Text('📚', style: TextStyle(fontSize: 18)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _label(),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF92400E),
+                  ),
+                ),
+                const Text(
+                  "Maya has extra study stress techniques ready for you.",
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: Color(0xFFB45309),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Builder(builder: (ctx) => GestureDetector(
+            onTap: () => ctx.go(AppRoutes.chat),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'Chat',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          )),
+        ],
+      ),
+    ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.1, end: 0);
+  }
+}
+
+// ─── 5-Minute Rescue ──────────────────────────────────────
+
+class _FiveMinRescue extends StatelessWidget {
+  final MoodState moodState;
+  const _FiveMinRescue({required this.moodState});
+
+  bool get _isLowMood =>
+      moodState.todayEntry != null && moodState.todayEntry!.moodScore <= 4;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = _isLowMood
+        ? "Tough day? Here's a 5-min rescue 💙"
+        : "No check-in yet — try a 5-min reset";
+    final subtitle = _isLowMood
+        ? "Quick exercises that actually help right now"
+        : "A quick mood lift before your day gets busy";
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: _isLowMood
+              ? [
+                  const Color(0xFF0EA5E9).withOpacity(0.08),
+                  AppColors.primary.withOpacity(0.06),
+                ]
+              : [
+                  AppColors.primary.withOpacity(0.06),
+                  const Color(0xFF10B981).withOpacity(0.05),
+                ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+            color: AppColors.primary.withOpacity(0.2), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(LucideIcons.zap,
+                    color: AppColors.primary, size: 16),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _RescueChip(
+                emoji: '🌬',
+                label: 'Breathe',
+                onTap: () => context.go(AppRoutes.mindfulness),
+              ),
+              const SizedBox(width: 8),
+              _RescueChip(
+                emoji: '💬',
+                label: 'Talk to Maya',
+                onTap: () => context.go(AppRoutes.chat),
+                primary: true,
+              ),
+              const SizedBox(width: 8),
+              _RescueChip(
+                emoji: '✅',
+                label: 'Check in',
+                onTap: () => context.go(AppRoutes.moodTracker),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ).animate().fadeIn(delay: 150.ms, duration: 400.ms).slideY(begin: 0.08, end: 0);
+  }
+}
+
+class _RescueChip extends StatelessWidget {
+  final String emoji;
+  final String label;
+  final VoidCallback onTap;
+  final bool primary;
+
+  const _RescueChip({
+    required this.emoji,
+    required this.label,
+    required this.onTap,
+    this.primary = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: primary ? AppColors.primary : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: primary
+                ? AppColors.primary
+                : AppColors.primary.withOpacity(0.2),
+          ),
+          boxShadow: primary
+              ? [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.25),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  )
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 14)),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: primary ? Colors.white : AppColors.primary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── For You Today Section ────────────────────────────────
+
+class _ForYouSection extends ConsumerStatefulWidget {
+  const _ForYouSection();
+
+  @override
+  ConsumerState<_ForYouSection> createState() => _ForYouSectionState();
+}
+
+class _ForYouSectionState extends ConsumerState<_ForYouSection> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(dailyContentProvider.notifier).loadIfNeeded();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final content = ref.watch(dailyContentProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Row(
+          children: [
+            Container(
+              width: 32, height: 32,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.primaryDark, AppColors.primary],
+                ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(LucideIcons.sparkles, size: 16, color: Colors.white),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'For You Today',
+                    style: TextStyle(
+                      fontFamily: 'Nunito',
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    'Personalized by Maya',
+                    style: TextStyle(
+                      fontFamily: 'Nunito',
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!content.isLoading)
+              GestureDetector(
+                onTap: () => ref.read(dailyContentProvider.notifier).generate(),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryContainer,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.refreshCw, size: 12, color: AppColors.primary),
+                      SizedBox(width: 4),
+                      Text('Refresh', style: TextStyle(fontFamily: 'Nunito', fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
+
+        // Content
+        if (content.isLoading)
+          _ArticleSkeletonList()
+        else if (content.hasArticles)
+          ...content.articles.asMap().entries.map(
+            (e) => _ArticleCard(
+              article: e.value,
+              delay: e.key * 100,
+            ),
+          )
+        else if (content.status == DailyContentStatus.error)
+          _ArticleErrorCard(
+            onRetry: () => ref.read(dailyContentProvider.notifier).generate(),
+          )
+        else
+          _ArticleEmptyCard(
+            onGenerate: () => ref.read(dailyContentProvider.notifier).generate(),
+          ),
+      ],
+    );
+  }
+}
+
+// ─── Article Card ─────────────────────────────────────────
+
+class _ArticleCard extends StatelessWidget {
+  final DailyArticle article;
+  final int delay;
+  const _ArticleCard({required this.article, this.delay = 0});
+
+  static const _categoryColors = {
+    'Anxiety': Color(0xFFFF6B6B),
+    'Stress': Color(0xFFFF8C42),
+    'Sleep': Color(0xFF0EA5E9),
+    'Focus': Color(0xFF10B981),
+    'Motivation': Color(0xFFF59E0B),
+    'Mindfulness': AppColors.primary,
+    'Academic': Color(0xFF06D6A0),
+    'Relationships': Color(0xFFFF6B6B),
+    'Confidence': Color(0xFFF59E0B),
+    'Energy': Color(0xFF10B981),
+  };
+
+  Color _catColor() =>
+      _categoryColors[article.category] ?? AppColors.primary;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _catColor();
+    return GestureDetector(
+      onTap: () => _showArticleSheet(context, article, color),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top accent bar
+            Container(
+              height: 4,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Category + read time
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          article.category,
+                          style: TextStyle(
+                            fontFamily: 'Nunito',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: color,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        article.readTime,
+                        style: const TextStyle(
+                          fontFamily: 'Nunito',
+                          fontSize: 11,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(article.emoji, style: const TextStyle(fontSize: 22)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // Title
+                  Text(
+                    article.title,
+                    style: const TextStyle(
+                      fontFamily: 'Nunito',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                      height: 1.3,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  // Summary
+                  Text(
+                    article.summary,
+                    style: const TextStyle(
+                      fontFamily: 'Nunito',
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      height: 1.5,
+                    ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 10),
+                  // Why for you
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.07),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: color.withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(LucideIcons.sparkles, size: 12, color: color),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            article.whyForYou,
+                            style: TextStyle(
+                              fontFamily: 'Nunito',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: color,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  // Read button
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Read article', style: TextStyle(fontFamily: 'Nunito', fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+                            SizedBox(width: 4),
+                            Icon(LucideIcons.arrowRight, size: 13, color: Colors.white),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(delay: Duration(milliseconds: delay), duration: 400.ms).slideY(begin: 0.1, end: 0);
+  }
+
+  void _showArticleSheet(BuildContext context, DailyArticle article, Color color) {
+    HapticFeedback.lightImpact();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _ArticleDetailSheet(article: article, color: color),
+    );
+  }
+}
+
+// ─── Article Detail Sheet ─────────────────────────────────
+
+class _ArticleDetailSheet extends StatelessWidget {
+  final DailyArticle article;
+  final Color color;
+  const _ArticleDetailSheet({required this.article, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.85,
+      maxChildSize: 0.95,
+      minChildSize: 0.5,
+      builder: (_, ctrl) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          children: [
+            // Handle + top bar
+            Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+            ),
+            // Accent bar
+            Container(
+              height: 3,
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                controller: ctrl,
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+                children: [
+                  // Category + time
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(article.category, style: TextStyle(fontFamily: 'Nunito', fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(article.readTime, style: const TextStyle(fontFamily: 'Nunito', fontSize: 12, color: AppColors.textMuted)),
+                      const Spacer(),
+                      Text(article.emoji, style: const TextStyle(fontSize: 28)),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    article.title,
+                    style: const TextStyle(fontFamily: 'Nunito', fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary, height: 1.3),
+                  ),
+                  const SizedBox(height: 10),
+                  // Why for you banner
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: color.withOpacity(0.25)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(LucideIcons.sparkles, size: 14, color: color),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            article.whyForYou,
+                            style: TextStyle(fontFamily: 'Nunito', fontSize: 12, fontWeight: FontWeight.w600, color: color, height: 1.4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  const Divider(color: AppColors.border),
+                  const SizedBox(height: 14),
+                  // Full content
+                  Text(
+                    article.content,
+                    style: const TextStyle(
+                      fontFamily: 'Nunito',
+                      fontSize: 15,
+                      color: AppColors.textPrimary,
+                      height: 1.75,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  // Close button
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Center(
+                        child: Text('Done', style: TextStyle(fontFamily: 'Nunito', fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Skeleton / Empty / Error states ─────────────────────
+
+class _ArticleSkeletonList extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(3, (i) => Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        height: 160,
+        decoration: BoxDecoration(
+          color: AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(18),
+        ),
+      ).animate(onPlay: (c) => c.repeat(reverse: true))
+        .shimmer(duration: 1200.ms, color: Colors.white.withOpacity(0.5))),
+    );
+  }
+}
+
+class _ArticleEmptyCard extends StatelessWidget {
+  final VoidCallback onGenerate;
+  const _ArticleEmptyCard({required this.onGenerate});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.primaryContainer,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+      ),
+      child: Column(
+        children: [
+          const Icon(LucideIcons.bookOpen, size: 32, color: AppColors.primary),
+          const SizedBox(height: 10),
+          const Text('Get Your Daily Articles', style: TextStyle(fontFamily: 'Nunito', fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+          const SizedBox(height: 6),
+          const Text('Maya will curate 3 personalized articles based on your profile and goals.', textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Nunito', fontSize: 13, color: AppColors.textSecondary, height: 1.5)),
+          const SizedBox(height: 14),
+          GestureDetector(
+            onTap: onGenerate,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(20)),
+              child: const Text('Generate Now', style: TextStyle(fontFamily: 'Nunito', fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ArticleErrorCard extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _ArticleErrorCard({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          const Icon(LucideIcons.wifiOff, size: 20, color: AppColors.textMuted),
+          const SizedBox(width: 12),
+          const Expanded(child: Text('Could not load articles. Tap to retry.', style: TextStyle(fontFamily: 'Nunito', fontSize: 13, color: AppColors.textSecondary))),
+          GestureDetector(
+            onTap: onRetry,
+            child: const Icon(LucideIcons.refreshCw, size: 18, color: AppColors.primary),
+          ),
+        ],
+      ),
+    );
   }
 }

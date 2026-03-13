@@ -1,4 +1,5 @@
 import '../../../core/constants/app_colors.dart';
+import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -22,6 +23,8 @@ class _WellnessScreenState extends ConsumerState<WellnessScreen>
     with TickerProviderStateMixin {
   late TabController _tabCtrl;
   final Set<int> _completedChallenges = {};
+  late ConfettiController _confettiCtrl;
+  int? _lastCompletedXp;
 
   static const _challenges = [
     _ChallengeData(
@@ -78,11 +81,13 @@ class _WellnessScreenState extends ConsumerState<WellnessScreen>
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
+    _confettiCtrl = ConfettiController(duration: const Duration(seconds: 2));
   }
 
   @override
   void dispose() {
     _tabCtrl.dispose();
+    _confettiCtrl.dispose();
     super.dispose();
   }
 
@@ -147,15 +152,86 @@ class _WellnessScreenState extends ConsumerState<WellnessScreen>
         body: TabBarView(
           controller: _tabCtrl,
           children: [
-            _ChallengesTab(
-              challenges: _challenges,
-              completedChallenges: _completedChallenges,
-              onComplete: (i) {
-                if (!_completedChallenges.contains(i)) {
-                  HapticFeedback.mediumImpact();
-                  setState(() => _completedChallenges.add(i));
-                }
-              },
+            Stack(
+              alignment: Alignment.topCenter,
+              children: [
+                _ChallengesTab(
+                  challenges: _challenges,
+                  completedChallenges: _completedChallenges,
+                  onComplete: (i) {
+                    if (!_completedChallenges.contains(i)) {
+                      HapticFeedback.mediumImpact();
+                      setState(() {
+                        _completedChallenges.add(i);
+                        _lastCompletedXp = _challenges[i].xp;
+                      });
+                      _confettiCtrl.play();
+                      // Clear XP pop after 2s
+                      Future.delayed(const Duration(seconds: 2), () {
+                        if (mounted) setState(() => _lastCompletedXp = null);
+                      });
+                    }
+                  },
+                ),
+                // Confetti overlay
+                ConfettiWidget(
+                  confettiController: _confettiCtrl,
+                  blastDirectionality: BlastDirectionality.explosive,
+                  numberOfParticles: 20,
+                  maxBlastForce: 20,
+                  minBlastForce: 5,
+                  emissionFrequency: 0.05,
+                  gravity: 0.2,
+                  colors: const [
+                    AppColors.primary, Color(0xFF0EA5E9),
+                    Color(0xFFF59E0B), Color(0xFFFF6B6B), Color(0xFF10B981),
+                  ],
+                ),
+                // XP pop toast
+                if (_lastCompletedXp != null)
+                  Positioned(
+                    top: 16,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFF59E0B), Color(0xFFFF8C42)],
+                        ),
+                        borderRadius: BorderRadius.circular(50),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFF59E0B).withOpacity(0.4),
+                            blurRadius: 16, offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('⚡',
+                              style: TextStyle(fontSize: 16)),
+                          const SizedBox(width: 6),
+                          Text(
+                            '+$_lastCompletedXp XP earned!',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                        .animate()
+                        .scale(
+                            duration: 300.ms,
+                            curve: Curves.elasticOut,
+                            begin: const Offset(0.5, 0.5))
+                        .then()
+                        .fadeOut(delay: 1400.ms, duration: 400.ms),
+                  ),
+              ],
             ),
             _JourneyTab(
               streakState: streakState,

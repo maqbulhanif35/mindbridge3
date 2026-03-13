@@ -414,7 +414,7 @@ class _EntriesTab extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(LucideIcons.filter, size: 10, color: AppColors.primary),
+                        const Icon(LucideIcons.slidersHorizontal, size: 10, color: AppColors.primary),
                         const SizedBox(width: 4),
                         Text(
                           moodFilter.label,
@@ -1049,7 +1049,7 @@ class _InsightsTabState extends State<_InsightsTab> {
               icon: LucideIcons.brain,
               label: 'Writing × mood',
               value: corrLabel.split(' ').take(3).join(' '),
-              color: const Color(0xFF6366F1),
+              color: AppColors.primary,
             ),
             const SizedBox(width: 12),
             _StatTile(

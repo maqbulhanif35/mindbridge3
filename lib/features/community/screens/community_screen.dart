@@ -630,7 +630,7 @@ class _ExploreTab extends StatelessWidget {
   const _ExploreTab({required this.posts});
 
   static const _topics = [
-    ('😰', 'Exam Stress', '234', Color(0xFF6366F1)),
+    ('😰', 'Exam Stress', '234', AppColors.primary),
     ('💤', 'Sleep Help', '189', Color(0xFF0EA5E9)),
     ('💪', 'Recovery', '156', Color(0xFF10B981)),
     ('🤝', 'Loneliness', '143', Color(0xFFFF6B6B)),
@@ -702,7 +702,7 @@ class _ExploreTab extends StatelessWidget {
         const _SectionHeader(icon: LucideIcons.trendingUp, title: 'Most Supported'),
         const SizedBox(height: 12),
 
-        ...top5.take(5).asMap().entries.map((e) {
+        ...top5.take(5).toList().asMap().entries.map((e) {
           final post = e.value;
           final tagColor = _PostCard._tagColors[post.tag] ?? AppColors.primary;
           return Container(
@@ -1361,7 +1361,7 @@ class _PostCard extends StatelessWidget {
   final VoidCallback onToggleComments;
 
   static const _tagColors = {
-    'Academic': Color(0xFF6366F1),
+    'Academic': AppColors.primary,
     'Recovery': Color(0xFF10B981),
     'Loneliness': Color(0xFF0EA5E9),
     'Anxiety': Color(0xFFFF8C42),

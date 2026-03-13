@@ -7,6 +7,152 @@ import '../../core/constants/app_colors.dart';
 import '../../core/router/app_router.dart';
 import 'achievement_overlay.dart';
 
+// ─── More Sheet ───────────────────────────────────────────
+
+void showMoreSheet(BuildContext context) {
+  HapticFeedback.lightImpact();
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (_) => _MoreSheet(
+      onNavigate: (route) {
+        Navigator.pop(context);
+        context.go(route);
+      },
+    ),
+  );
+}
+
+class _MoreSheetDest {
+  final IconData icon;
+  final String label;
+  final String sub;
+  final String route;
+  final Color color;
+  const _MoreSheetDest({
+    required this.icon,
+    required this.label,
+    required this.sub,
+    required this.route,
+    required this.color,
+  });
+}
+
+class _MoreSheet extends StatelessWidget {
+  final ValueChanged<String> onNavigate;
+  const _MoreSheet({required this.onNavigate});
+
+  static const _items = [
+    _MoreSheetDest(icon: LucideIcons.wind, label: 'Mindfulness', sub: 'Breathing & grounding', route: AppRoutes.mindfulness, color: Color(0xFF10B981)),
+    _MoreSheetDest(icon: LucideIcons.activity, label: 'Wellness Hub', sub: 'Sleep, habits & goals', route: AppRoutes.wellness, color: Color(0xFF06D6A0)),
+    _MoreSheetDest(icon: LucideIcons.library, label: 'Resources', sub: 'Articles & guides', route: AppRoutes.resources, color: Color(0xFFF59E0B)),
+    _MoreSheetDest(icon: LucideIcons.users, label: 'Community', sub: 'Connect with peers', route: AppRoutes.community, color: Color(0xFF0EA5E9)),
+    _MoreSheetDest(icon: LucideIcons.userRound, label: 'Profile & Settings', sub: 'Edit your details', route: AppRoutes.profile, color: AppColors.primary),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // handle
+          Container(
+            width: 40, height: 4,
+            margin: const EdgeInsets.only(top: 12, bottom: 18),
+            decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'More',
+                style: TextStyle(fontFamily: 'Nunito', fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+              ),
+            ),
+          ),
+          ..._items.map((d) => _MoreTile(dest: d, onTap: () => onNavigate(d.route))),
+          // Crisis row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: GestureDetector(
+              onTap: () => onNavigate(AppRoutes.crisis),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withOpacity(0.07),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44, height: 44,
+                      decoration: BoxDecoration(color: AppColors.error.withOpacity(0.12), borderRadius: BorderRadius.circular(14)),
+                      child: const Icon(LucideIcons.phoneCall, color: AppColors.error, size: 22),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('Crisis Support', style: TextStyle(fontFamily: 'Nunito', fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.error)),
+                        Text('Immediate help & hotlines', style: TextStyle(fontFamily: 'Nunito', fontSize: 12, color: AppColors.error)),
+                      ]),
+                    ),
+                    const Icon(LucideIcons.chevronRight, color: AppColors.error, size: 18),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 12),
+        ],
+      ),
+    );
+  }
+}
+
+class _MoreTile extends StatelessWidget {
+  final _MoreSheetDest dest;
+  final VoidCallback onTap;
+  const _MoreTile({required this.dest, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () { HapticFeedback.lightImpact(); onTap(); },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Row(
+          children: [
+            Container(
+              width: 48, height: 48,
+              decoration: BoxDecoration(
+                color: dest.color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(dest.icon, color: dest.color, size: 24),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(dest.label, style: const TextStyle(fontFamily: 'Nunito', fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                Text(dest.sub, style: const TextStyle(fontFamily: 'Nunito', fontSize: 12, color: AppColors.textSecondary)),
+              ]),
+            ),
+            const Icon(LucideIcons.chevronRight, color: AppColors.textMuted, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Main Shell ───────────────────────────────────────────
 // StatelessWidget + GoRouterState.of(context) creates an InheritedWidget
 // dependency that automatically rebuilds the shell on every route change.
@@ -45,7 +191,7 @@ class MainShell extends StatelessWidget {
               case 1: context.go(AppRoutes.chat);
               case 2: context.go(AppRoutes.moodTracker);
               case 3: context.go(AppRoutes.journal);
-              case 4: context.go(AppRoutes.mindfulness);
+              case 4: showMoreSheet(context);
             }
           },
         ),
@@ -75,7 +221,7 @@ class _LiquidNavBar extends StatefulWidget {
     _NavItem(icon: LucideIcons.messageCircle, label: 'Maya'),
     _NavItem(icon: LucideIcons.smile, label: 'Mood'),
     _NavItem(icon: LucideIcons.bookOpen, label: 'Journal'),
-    _NavItem(icon: LucideIcons.compass, label: 'Explore'),
+    _NavItem(icon: LucideIcons.layoutGrid, label: 'More'),
   ];
 
   @override
