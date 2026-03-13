@@ -230,20 +230,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       await SupabaseService.upsertProfile(profile);
 
-      // Email confirmation is disabled in this project → immediate session
-      if (response.session != null) {
-        state = state.copyWith(
-          status: AuthStatus.authenticated,
-          user: profile,
-          clearError: true,
-        );
-      } else {
-        // Email confirmation enabled — wait for user to confirm
-        state = state.copyWith(
-          status: AuthStatus.pendingVerification,
-          pendingEmail: normalizedEmail,
-        );
-      }
+      // Always require email verification — send OTP and wait for confirmation
+      state = state.copyWith(
+        status: AuthStatus.pendingVerification,
+        pendingEmail: normalizedEmail,
+      );
       return true;
     } on sb.AuthException catch (e) {
       state = state.copyWith(
@@ -374,6 +365,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return false;
       }
       await _loadProfile(user.id);
+      // Welcome email for email/password signups (profile already exists,
+      // so _loadProfile won't fire it — we send it here instead)
+      final profile = state.user;
+      if (profile != null) {
+        EmailService.sendWelcomeEmail(
+          toEmail: profile.email,
+          name: profile.displayName,
+        );
+      }
       return true;
     } catch (_) {
       state = state.copyWith(
