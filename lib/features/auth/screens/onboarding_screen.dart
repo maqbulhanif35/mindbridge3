@@ -46,10 +46,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
 
   static final _infoPages = [
     _PageData(
-      badge: '69% of students',
+      badge: '7 in 10 Kenyan students',
       headline: "You're not\nalone.",
       body:
-          'Most university students silently struggle with their mental health. MindBridge is your private space — zero stigma, total support.',
+          'Most Kenyan university students silently struggle — HELB stress, CAT pressure, family expectations. MindBridge is your private space — zero stigma, total support.',
       glow: const Color(0xFF00BEB4),
       visual: const _MoodMockup(),
     ),
@@ -914,12 +914,14 @@ class _ProgressMockup extends StatelessWidget {
 
 const _kIntents = [
   {'id': 'anxiety', 'emoji': '😰', 'label': 'Managing anxiety'},
-  {'id': 'stress', 'emoji': '📚', 'label': 'Academic stress'},
+  {'id': 'stress', 'emoji': '📝', 'label': 'CAT & exam pressure'},
   {'id': 'sleep', 'emoji': '😴', 'label': 'Sleep & rest'},
   {'id': 'loneliness', 'emoji': '💙', 'label': 'Loneliness'},
-  {'id': 'motivation', 'emoji': '🚀', 'label': 'Motivation'},
+  {'id': 'motivation', 'emoji': '🚀', 'label': 'Staying motivated'},
+  {'id': 'finance', 'emoji': '💸', 'label': 'Financial stress (HELB)'},
   {'id': 'self', 'emoji': '💪', 'label': 'Self-confidence'},
   {'id': 'grief', 'emoji': '🌹', 'label': 'Grief & loss'},
+  {'id': 'attachment', 'emoji': '🏢', 'label': 'Attachment pressure'},
   {'id': 'explore', 'emoji': '✨', 'label': 'Just exploring'},
 ];
 
