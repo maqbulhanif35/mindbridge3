@@ -56,7 +56,7 @@ class _MoodTrackerScreenState extends ConsumerState<MoodTrackerScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => Dialog(
+      builder: (dialogContext) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         child: Padding(
           padding: const EdgeInsets.all(28),
@@ -89,7 +89,7 @@ class _MoodTrackerScreenState extends ConsumerState<MoodTrackerScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.pop(context);
+                    Navigator.of(dialogContext).pop();
                     context.go(AppRoutes.moodAnalytics);
                   },
                   style: ElevatedButton.styleFrom(
@@ -109,7 +109,7 @@ class _MoodTrackerScreenState extends ConsumerState<MoodTrackerScreen> {
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: () {
-                    Navigator.pop(context);
+                    Navigator.of(dialogContext).pop();
                     context.go(AppRoutes.chat);
                   },
                   icon: const Icon(LucideIcons.messageCircle, size: 15),
@@ -127,7 +127,7 @@ class _MoodTrackerScreenState extends ConsumerState<MoodTrackerScreen> {
               ),
               TextButton(
                 onPressed: () {
-                  Navigator.pop(context);
+                  Navigator.of(dialogContext).pop();
                   context.go(AppRoutes.home);
                 },
                 child: const Text('Back to Home',
