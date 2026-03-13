@@ -100,11 +100,11 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
 
-                  // ─── Exam Season Banner ──────────────────
-                  if (_ExamBanner.isExamSeason())
-                    const SliverPadding(
-                      padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-                      sliver: SliverToBoxAdapter(child: _ExamBanner()),
+                  // ─── Kenyan Academic Banner ──────────────
+                  if (_KenyanAcademicBanner.bannerData() != null)
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      sliver: const SliverToBoxAdapter(child: _KenyanAcademicBanner()),
                     ),
 
                   // ─── Maya Message Card (HERO) ────────────
@@ -137,6 +137,12 @@ class HomeScreen extends ConsumerWidget {
                         streakState: streakState,
                       ),
                     ),
+                  ),
+
+                  // ─── Daily Affirmation ───────────────────
+                  const SliverPadding(
+                    padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    sliver: SliverToBoxAdapter(child: _DailyAffirmation()),
                   ),
 
                   // ─── Quick Actions Grid ──────────────────
@@ -178,6 +184,12 @@ class HomeScreen extends ConsumerWidget {
                     sliver: SliverToBoxAdapter(
                       child: _ChallengesSection(),
                     ),
+                  ),
+
+                  // ─── Community Preview ───────────────────
+                  const SliverPadding(
+                    padding: EdgeInsets.fromLTRB(16, 20, 16, 0),
+                    sliver: SliverToBoxAdapter(child: _CommunityPreviewCard()),
                   ),
 
                   // ─── For You Today ───────────────────────
@@ -364,7 +376,7 @@ class _MayaMessageCard extends StatelessWidget {
   List<String> _chips() {
     final today = moodState.todayEntry;
     if (today == null) {
-      return ["I'm feeling anxious", "How to sleep better?", "I need motivation"];
+      return ["Stressed about CATs?", "HELB hasn't dropped 😩", "I need motivation"];
     }
     if (today.moodScore <= 4) {
       return ["Help me feel better", "I'm overwhelmed", "Breathing exercises"];
@@ -1894,82 +1906,177 @@ class _ChallengeTile extends StatelessWidget {
   }
 }
 
-// ─── Exam Season Banner ───────────────────────────────────
+// ─── Kenyan Academic Banner ────────────────────────────────
 
-class _ExamBanner extends StatelessWidget {
-  const _ExamBanner();
+class _BannerData {
+  final String emoji;
+  final String title;
+  final String body;
+  final Color color;
+  final Color bgColor;
+  final String cta;
+  final String route;
 
-  /// Show during typical exam seasons: Mar–Apr and Nov–Dec
-  static bool isExamSeason() {
+  const _BannerData({
+    required this.emoji,
+    required this.title,
+    required this.body,
+    required this.color,
+    required this.bgColor,
+    required this.cta,
+    required this.route,
+  });
+}
+
+class _KenyanAcademicBanner extends StatelessWidget {
+  const _KenyanAcademicBanner();
+
+  static _BannerData? bannerData() {
     final m = DateTime.now().month;
-    return m == 3 || m == 4 || m == 11 || m == 12;
-  }
+    final d = DateTime.now().day;
 
-  static String _label() {
-    final m = DateTime.now().month;
-    if (m == 3 || m == 4) return 'Spring exam season is here.';
-    return 'Fall exam season is here.';
+    // Attachment / Internship season: July–August
+    if (m == 7 || m == 8) {
+      return const _BannerData(
+        emoji: '🏢',
+        title: 'Attachment Season',
+        body: "Industrial attachment can be tough. Whether paid or unpaid — your mental health always comes first.",
+        color: Color(0xFF0EA5E9),
+        bgColor: Color(0xFFE0F4FF),
+        cta: 'Talk to Maya',
+        route: AppRoutes.chat,
+      );
+    }
+
+    // HELB disbursement windows: Feb (Sem 2), Sep first 3 weeks (Sem 1)
+    if (m == 2 || (m == 9 && d <= 21)) {
+      return const _BannerData(
+        emoji: '💸',
+        title: 'HELB Disbursement Season',
+        body: 'HELB funds are rolling out. Financial stress is valid — Maya is here whenever you need support.',
+        color: Color(0xFFF59E0B),
+        bgColor: Color(0xFFFFF8E1),
+        cta: 'Talk to Maya',
+        route: AppRoutes.chat,
+      );
+    }
+
+    // Semester 2 CAT season: mid-March through April
+    if ((m == 3 && d >= 14) || m == 4) {
+      return const _BannerData(
+        emoji: '📝',
+        title: 'CAT Season',
+        body: "Sem 2 CATs are here. Take it one paper at a time. You've prepared for this — Maya has your back.",
+        color: Color(0xFFFF6B6B),
+        bgColor: Color(0xFFFFEDED),
+        cta: 'Get support',
+        route: AppRoutes.chat,
+      );
+    }
+
+    // Semester 2 end-of-semester exams: June
+    if (m == 6) {
+      return const _BannerData(
+        emoji: '🎯',
+        title: 'Semester 2 Exams',
+        body: 'Final exams: rest well, eat, and remember — your worth is not defined by your grade.',
+        color: Color(0xFFFF6B35),
+        bgColor: Color(0xFFFFF0E8),
+        cta: 'Breathe first',
+        route: AppRoutes.mindfulness,
+      );
+    }
+
+    // Semester 1 CAT season: mid-October through November
+    if ((m == 10 && d >= 14) || m == 11) {
+      return const _BannerData(
+        emoji: '📝',
+        title: 'CAT Season',
+        body: "Sem 1 CATs are underway. Maya has study stress tips ready whenever you need them. You've got this.",
+        color: Color(0xFFFF6B6B),
+        bgColor: Color(0xFFFFEDED),
+        cta: 'Get support',
+        route: AppRoutes.chat,
+      );
+    }
+
+    // Semester 1 end-of-semester exams: January
+    if (m == 1) {
+      return const _BannerData(
+        emoji: '🎯',
+        title: 'Semester 1 Exams',
+        body: 'Exam time — balance revision with rest. Sleep matters as much as studying. You can do this.',
+        color: Color(0xFFFF6B35),
+        bgColor: Color(0xFFFFF0E8),
+        cta: 'Study tips',
+        route: AppRoutes.chat,
+      );
+    }
+
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
+    final data = bannerData()!;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFF3CD), Color(0xFFFFF8E1)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: data.bgColor,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-            color: const Color(0xFFF59E0B).withOpacity(0.35), width: 1),
+        border: Border.all(color: data.color.withOpacity(0.3), width: 1),
       ),
       child: Row(
         children: [
-          const Text('📚', style: TextStyle(fontSize: 18)),
+          Text(data.emoji, style: const TextStyle(fontSize: 22)),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _label(),
-                  style: const TextStyle(
+                  data.title,
+                  style: TextStyle(
+                    fontFamily: 'Nunito',
                     fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF92400E),
+                    fontWeight: FontWeight.w800,
+                    color: data.color,
                   ),
                 ),
-                const Text(
-                  "Maya has extra study stress techniques ready for you.",
-                  style: TextStyle(
+                Text(
+                  data.body,
+                  style: const TextStyle(
+                    fontFamily: 'Nunito',
                     fontSize: 11.5,
-                    color: Color(0xFFB45309),
+                    color: Color(0xFF4A5568),
+                    height: 1.35,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
           const SizedBox(width: 8),
-          Builder(builder: (ctx) => GestureDetector(
-            onTap: () => ctx.go(AppRoutes.chat),
+          GestureDetector(
+            onTap: () => context.go(data.route),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFFF59E0B),
+                color: data.color,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Text(
-                'Chat',
-                style: TextStyle(
-                  fontSize: 12,
+              child: Text(
+                data.cta,
+                style: const TextStyle(
+                  fontFamily: 'Nunito',
+                  fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),
               ),
             ),
-          )),
+          ),
         ],
       ),
     ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.1, end: 0);
@@ -2638,5 +2745,212 @@ class _ArticleErrorCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+// ─── Daily Affirmation ─────────────────────────────────────
+
+class _DailyAffirmation extends StatelessWidget {
+  const _DailyAffirmation();
+
+  static const _affirmations = [
+    ('Harambee — together we achieve more.', 'Kenyan National Motto'),
+    ('Pole pole ndio mwendo. Slowly but surely.', 'Swahili Proverb'),
+    ('You are not your CGPA. You are not your HELB balance.', 'MindBridge'),
+    ('Even small steps forward still count.', 'African Wisdom'),
+    ('Ujasiri ni nguvu ya ndani. Courage is inner strength.', 'Swahili'),
+    ('Your future self is proud of you for showing up today.', 'MindBridge'),
+    ('A calm mind reflects clearly — like still water.', 'Kenyan Proverb'),
+    ('Rest is not laziness. Rest is how you grow stronger.', 'MindBridge'),
+    ('Ukweli ni nguvu. Truth is strength.', 'Swahili Proverb'),
+    ('You belong here, even on the hard days.', 'MindBridge'),
+    ('One CAT at a time. One day at a time.', 'MindBridge'),
+    ('Kindness always starts with yourself.', 'African Wisdom'),
+    ('Your story is still being written — keep going.', 'MindBridge'),
+    ('Tunaenda pamoja. We go together.', 'Swahili'),
+    ('Even the tallest tree started as a seed.', 'African Proverb'),
+    ('Your mental health matters more than your transcript.', 'MindBridge'),
+    ('Simama imara. Stand firm.', 'Swahili'),
+    ('Asking for help is a sign of wisdom, not weakness.', 'African Wisdom'),
+    ('Breathe. You have survived every hard day so far.', 'MindBridge'),
+    ('Jipende kwanza. Love yourself first.', 'Swahili'),
+    ('Progress over perfection, always.', 'MindBridge'),
+    ('Ubuntu — I am because we are.', 'African Philosophy'),
+    ('You are enough, exactly as you are right now.', 'MindBridge'),
+    ('Pumzika kidogo. Rest a little — then rise again.', 'Swahili'),
+    ('Hard times reveal your strength. You are stronger than you know.', 'African Wisdom'),
+    ('Study hard, but never forget to care for your mind.', 'MindBridge'),
+    ('Asante kwa kujaribu. Thank you for trying.', 'Swahili'),
+    ('Every sunrise is a new chance to begin again.', 'African Proverb'),
+    ('Your wellbeing is not a distraction from your goals — it is the path.', 'MindBridge'),
+    ('Sisi ni moja. We are one.', 'Swahili'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final idx = DateTime.now().difference(DateTime(2024, 1, 1)).inDays %
+        _affirmations.length;
+    final (quote, source) = _affirmations[idx];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primary.withOpacity(0.06),
+            const Color(0xFF10B981).withOpacity(0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withOpacity(0.15)),
+      ),
+      child: Row(
+        children: [
+          const Text('✨', style: TextStyle(fontSize: 16)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '"$quote"',
+                  style: const TextStyle(
+                    fontFamily: 'Nunito',
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                    fontStyle: FontStyle.italic,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '— $source',
+                  style: const TextStyle(
+                    fontFamily: 'Nunito',
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(delay: 250.ms, duration: 400.ms);
+  }
+}
+
+// ─── Community Preview Card ────────────────────────────────
+
+class _CommunityPreviewCard extends StatelessWidget {
+  const _CommunityPreviewCard();
+
+  static const _vibes = [
+    '💬 Someone shared how they survived CAT week without burning out.',
+    '🤝 Students are talking about HELB delays and how to cope.',
+    '💪 Top post: "You are not your CGPA — and here\'s why."',
+    '📚 Students forming study groups for finals. Find yours!',
+    '🌟 Someone just shared their first week at attachment. Cheer them on!',
+    '💙 A student opened up about campus loneliness. Show some love.',
+    '🎉 Big wins being celebrated in the community today.',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final idx = DateTime.now().difference(DateTime(2024, 1, 1)).inDays %
+        _vibes.length;
+    final vibe = _vibes[idx];
+
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        context.go(AppRoutes.community);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFFF6B6B).withOpacity(0.2)),
+          boxShadow: const [
+            BoxShadow(
+                color: Color(0x08000000), blurRadius: 10, offset: Offset(0, 3)),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF6B6B).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(LucideIcons.users,
+                  color: Color(0xFFFF6B6B), size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Campus Community',
+                    style: TextStyle(
+                      fontFamily: 'Nunito',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    vibe,
+                    style: const TextStyle(
+                      fontFamily: 'Nunito',
+                      fontSize: 11.5,
+                      color: AppColors.textSecondary,
+                      height: 1.35,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF6B6B).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Join',
+                    style: TextStyle(
+                      fontFamily: 'Nunito',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFFF6B6B),
+                    ),
+                  ),
+                  SizedBox(width: 3),
+                  Icon(LucideIcons.arrowRight,
+                      size: 11, color: Color(0xFFFF6B6B)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(delay: 600.ms, duration: 400.ms).slideY(begin: 0.08, end: 0);
   }
 }
