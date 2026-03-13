@@ -86,7 +86,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
   final Ref _ref;
   final http.Client _client = http.Client();
 
-  String get _apiKey => (dotenv.env['GROQ_API_KEY'] ?? '').trim();
+  // Try compile-time constant first (--dart-define for web), fall back to .env
+  static const _compiledKey = String.fromEnvironment('GROQ_API_KEY');
+  String get _apiKey {
+    if (_compiledKey.isNotEmpty) return _compiledKey;
+    return (dotenv.env['GROQ_API_KEY'] ?? '').trim();
+  }
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $_apiKey',

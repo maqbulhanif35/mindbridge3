@@ -9,15 +9,12 @@ flutter config --enable-web
 flutter --version
 
 echo "=== Creating .env from Netlify environment ==="
-cat > .env <<EOF
-GROQ_API_KEY=${GROQ_API_KEY}
-GEMINI_API_KEY=${GEMINI_API_KEY:-}
-EOF
+printf "GROQ_API_KEY=%s\n" "${GROQ_API_KEY}" > .env
 
 echo "=== Installing dependencies ==="
 flutter pub get
 
 echo "=== Building for web ==="
-flutter build web --release
+flutter build web --release --dart-define=GROQ_API_KEY="${GROQ_API_KEY}"
 
 echo "=== Done ==="
