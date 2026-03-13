@@ -112,12 +112,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
         // New user (Google OAuth or email signup) — create a default profile
         final sbUser = SupabaseService.currentUser!;
         final meta = sbUser.userMetadata ?? {};
-        final rawName = (meta['full_name'] ?? meta['name'] ?? meta['email'] ?? 'User') as String;
+        // full_name is set by Google OAuth and by our signUp(data:) for email users.
+        // Never fall back to email — it would show "user@gmail.com" as the name.
+        final rawName = (meta['full_name'] ?? meta['name'] ?? '') as String;
         final name = rawName.trim();
         final newProfile = UserModel(
           id: userId,
           email: sbUser.email ?? '',
-          name: name.isNotEmpty ? name : 'Student',
+          name: rawName.isNotEmpty ? rawName : 'Student',
           createdAt: DateTime.now(),
         );
         await SupabaseService.upsertProfile(newProfile);
@@ -203,6 +205,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final response = await SupabaseService.signUp(
         email: normalizedEmail,
         password: password,
+        name: name.trim(),
       );
       final user = response.user;
       if (user == null) {

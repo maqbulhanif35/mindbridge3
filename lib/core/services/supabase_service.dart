@@ -18,12 +18,14 @@ class SupabaseService {
   static Future<sb.AuthResponse> signUp({
     required String email,
     required String password,
+    String? name,
   }) =>
       _auth.signUp(
         email: email,
         password: password,
-        // Ensures the confirmation link in the email points to the correct
-        // origin (Vercel in prod, localhost in dev) rather than Supabase defaults.
+        // Store name in auth metadata so _loadProfile can recover it
+        // even if the profiles table write fails before email verification.
+        data: name != null && name.isNotEmpty ? {'full_name': name} : null,
         emailRedirectTo: kIsWeb ? Uri.base.origin : null,
       );
 
