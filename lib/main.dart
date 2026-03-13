@@ -8,8 +8,10 @@ import 'app.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables
-  await dotenv.load(fileName: '.env');
+  // Load environment variables (only exists locally — silently ignored in production)
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (_) {}
 
   // Transparent status bar
   SystemChrome.setSystemUIOverlayStyle(
