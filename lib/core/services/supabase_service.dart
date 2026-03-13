@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 import '../models/user_model.dart';
 
@@ -46,11 +47,15 @@ class SupabaseService {
 
   static Future<void> refreshSession() => _auth.refreshSession();
 
-  static Future<void> signInWithGoogle() =>
-      _auth.signInWithOAuth(
-        sb.OAuthProvider.google,
-        authScreenLaunchMode: sb.LaunchMode.platformDefault,
-      );
+  static Future<void> signInWithGoogle() {
+    // Use current origin so it works on both localhost and Vercel
+    final redirectTo = kIsWeb ? Uri.base.origin : null;
+    return _auth.signInWithOAuth(
+      sb.OAuthProvider.google,
+      redirectTo: redirectTo,
+      authScreenLaunchMode: sb.LaunchMode.platformDefault,
+    );
+  }
 
   // ─── Profile CRUD ──────────────────────────────────────
 
