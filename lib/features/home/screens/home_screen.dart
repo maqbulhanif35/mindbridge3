@@ -100,6 +100,16 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
 
+                  // ─── Complete Profile Banner ─────────────
+                  if (user != null &&
+                      (user.university == null || user.goals.isEmpty))
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      sliver: SliverToBoxAdapter(
+                        child: _CompleteProfileBanner(user: user),
+                      ),
+                    ),
+
                   // ─── Kenyan Academic Banner ──────────────
                   if (_KenyanAcademicBanner.bannerData() != null)
                     SliverPadding(
@@ -1640,6 +1650,84 @@ class _ChallengesSection extends ConsumerWidget {
         }),
       ],
     ).animate().fadeIn(delay: 550.ms, duration: 400.ms);
+  }
+}
+
+// ─── Complete Profile Banner ──────────────────────────────
+
+class _CompleteProfileBanner extends StatelessWidget {
+  final dynamic user; // UserModel
+  const _CompleteProfileBanner({required this.user});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.go(AppRoutes.profile),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF00897B), Color(0xFF00BEB4)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.20),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                LucideIcons.userRoundCog,
+                size: 18,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Complete your profile',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Help Maya personalise your experience',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              LucideIcons.chevronRight,
+              size: 16,
+              color: Colors.white70,
+            ),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.1);
   }
 }
 

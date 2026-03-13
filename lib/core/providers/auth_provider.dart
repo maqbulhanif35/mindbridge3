@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 import '../models/user_model.dart';
 import '../services/supabase_service.dart';
+import '../services/email_service.dart';
 
 // ─── Auth Status ──────────────────────────────────────────
 
@@ -108,10 +109,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
           clearError: true,
         );
       } else {
-        // New OAuth user (Google) — create a default profile from their metadata
+        // New user (Google OAuth or email signup) — create a default profile
         final sbUser = SupabaseService.currentUser!;
         final meta = sbUser.userMetadata ?? {};
-        final name = ((meta['full_name'] ?? meta['name'] ?? meta['email'] ?? 'User') as String).trim();
+        final rawName = (meta['full_name'] ?? meta['name'] ?? meta['email'] ?? 'User') as String;
+        final name = rawName.trim();
         final newProfile = UserModel(
           id: userId,
           email: sbUser.email ?? '',
@@ -123,6 +125,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
           status: AuthStatus.authenticated,
           user: newProfile,
           clearError: true,
+        );
+        // Send welcome email — fire-and-forget, never awaited for UX
+        EmailService.sendWelcomeEmail(
+          toEmail: newProfile.email,
+          name: newProfile.displayName,
         );
       }
     } catch (_) {

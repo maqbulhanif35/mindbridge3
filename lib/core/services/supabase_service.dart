@@ -19,7 +19,13 @@ class SupabaseService {
     required String email,
     required String password,
   }) =>
-      _auth.signUp(email: email, password: password);
+      _auth.signUp(
+        email: email,
+        password: password,
+        // Ensures the confirmation link in the email points to the correct
+        // origin (Vercel in prod, localhost in dev) rather than Supabase defaults.
+        emailRedirectTo: kIsWeb ? Uri.base.origin : null,
+      );
 
   static Future<sb.AuthResponse> signIn({
     required String email,
