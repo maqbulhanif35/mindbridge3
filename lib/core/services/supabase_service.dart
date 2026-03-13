@@ -46,6 +46,12 @@ class SupabaseService {
 
   static Future<void> refreshSession() => _auth.refreshSession();
 
+  static Future<void> signInWithGoogle() =>
+      _auth.signInWithOAuth(
+        sb.OAuthProvider.google,
+        authScreenLaunchMode: sb.LaunchMode.platformDefault,
+      );
+
   // ─── Profile CRUD ──────────────────────────────────────
 
   static Future<UserModel?> getProfile(String userId) async {

@@ -357,7 +357,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   iconColor: const Color(0xFF4285F4),
                   iconBg: const Color(0xFFEBF1FF),
                   label: 'Continue with Google',
-                  onTap: () => _showComingSoon('Google'),
+                  onTap: () => ref.read(authProvider.notifier).signInWithGoogle(),
                 ).animate().fadeIn(delay: 130.ms).slideY(begin: 0.2),
 
                 const SizedBox(height: 9),
@@ -605,6 +605,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
+  }
+
+  Future<void> _signInWithGoogle() async {
+    await ref.read(authProvider.notifier).signInWithGoogle();
+    // On web: browser navigates away to Google — nothing to do here.
+    // On return, authStateChange fires and router redirects to home.
   }
 }
 

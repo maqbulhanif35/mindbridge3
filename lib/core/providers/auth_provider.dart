@@ -108,7 +108,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
           clearError: true,
         );
       } else {
-        state = state.copyWith(status: AuthStatus.unauthenticated);
+        // New OAuth user (Google) — create a default profile from their metadata
+        final sbUser = SupabaseService.currentUser!;
+        final meta = sbUser.userMetadata ?? {};
+        final name = ((meta['full_name'] ?? meta['name'] ?? meta['email'] ?? 'User') as String).trim();
+        final newProfile = UserModel(
+          id: userId,
+          email: sbUser.email ?? '',
+          name: name.isNotEmpty ? name : 'Student',
+          createdAt: DateTime.now(),
+        );
+        await SupabaseService.upsertProfile(newProfile);
+        state = state.copyWith(
+          status: AuthStatus.authenticated,
+          user: newProfile,
+          clearError: true,
+        );
       }
     } catch (_) {
       state = state.copyWith(status: AuthStatus.unauthenticated);
@@ -276,6 +291,27 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return false;
     } catch (_) {
       return false;
+    }
+  }
+
+  // ─── Google Sign-In ───────────────────────────────────
+
+  Future<void> signInWithGoogle() async {
+    state = state.copyWith(status: AuthStatus.loading, clearError: true);
+    try {
+      await SupabaseService.signInWithGoogle();
+      // On web: browser redirects to Google and back — authStateChange handles the rest.
+      // On mobile: OAuth popup closes and signedIn event fires automatically.
+    } on sb.AuthException catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: _humanizeAuthError(e),
+      );
+    } catch (_) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: 'Google sign-in failed. Please try again.',
+      );
     }
   }
 
