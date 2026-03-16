@@ -262,7 +262,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (email == null) return false;
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
     try {
-      await SupabaseService.sendOtpEmail(email);
+      await SupabaseService.resendVerificationEmail(email);
       state = state.copyWith(status: AuthStatus.pendingVerification);
       return true;
     } on sb.AuthException catch (e) {
@@ -355,7 +355,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (email == null) return false;
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
     try {
-      final response = await SupabaseService.verifyEmailOtp(
+      final response = await SupabaseService.verifyOtp(
         email: email,
         token: code,
       );
