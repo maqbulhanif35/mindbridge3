@@ -56,11 +56,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
     _init();
   }
 
+  // Suppresses auth stream events while register() or verifyOtp() are
+  // in flight — prevents those methods' own state writes from being
+  // overridden by a concurrent signedIn / userUpdated stream event.
+  bool _suppressAuthStream = false;
+
   void _init() {
     final session = SupabaseService.currentSession;
     if (session != null) {
       final user = session.user;
-      // Only restore session if email is confirmed
       if (user.emailConfirmedAt != null) {
         _loadProfile(user.id);
       } else {
@@ -74,6 +78,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
 
     SupabaseService.authStream.listen((data) {
+      // Don't let stream events race with ongoing auth operations
+      if (_suppressAuthStream) return;
+
       final event = data.event;
       final session = data.session;
 
@@ -88,7 +95,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
           );
         }
       } else if (event == sb.AuthChangeEvent.userUpdated && session != null) {
-        // Fires when user confirms email
         final user = session.user;
         if (user.emailConfirmedAt != null) {
           _loadProfile(user.id);
@@ -98,6 +104,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
     });
   }
+
+  // ─── Load / Create Profile ────────────────────────────
 
   Future<void> _loadProfile(String userId) async {
     try {
@@ -109,13 +117,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
           clearError: true,
         );
       } else {
-        // New user (Google OAuth or email signup) — create a default profile
+        // New user (Google OAuth) — create a default profile from auth metadata.
+        // For email/password new users this path is only reached after OTP
+        // verification; their profile is usually already written by register().
         final sbUser = SupabaseService.currentUser!;
         final meta = sbUser.userMetadata ?? {};
-        // full_name is set by Google OAuth and by our signUp(data:) for email users.
-        // Never fall back to email — it would show "user@gmail.com" as the name.
         final rawName = (meta['full_name'] ?? meta['name'] ?? '') as String;
-        final name = rawName.trim();
         final newProfile = UserModel(
           id: userId,
           email: sbUser.email ?? '',
@@ -128,11 +135,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
           user: newProfile,
           clearError: true,
         );
-        // Send welcome email — fire-and-forget, never awaited for UX
-        EmailService.sendWelcomeEmail(
-          toEmail: newProfile.email,
-          name: newProfile.displayName,
-        );
+        // Welcome email for Google OAuth new users.
+        // Email/password users get it from verifyOtp() instead.
+        if (!_suppressAuthStream) {
+          EmailService.sendWelcomeEmail(
+            toEmail: newProfile.email,
+            name: newProfile.displayName,
+          );
+        }
       }
     } catch (_) {
       state = state.copyWith(status: AuthStatus.unauthenticated);
@@ -158,13 +168,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return false;
       }
 
-      // Check email confirmation
       if (user.emailConfirmedAt == null) {
         state = state.copyWith(
           status: AuthStatus.pendingVerification,
           pendingEmail: normalizedEmail,
         );
-        return true; // Not an error — just needs verification
+        return true;
       }
 
       await _loadProfile(user.id);
@@ -201,6 +210,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }) async {
     final normalizedEmail = email.trim().toLowerCase();
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
+
+    // Block the auth stream for the duration of sign-up so the automatic
+    // signedIn event that Supabase fires cannot race us to authenticated state
+    // before we have had a chance to set pendingVerification.
+    _suppressAuthStream = true;
     try {
       final response = await SupabaseService.signUp(
         email: normalizedEmail,
@@ -216,24 +230,26 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return false;
       }
 
-      // Create profile row immediately (even before email confirmation)
-      final profile = UserModel(
-        id: user.id,
-        email: normalizedEmail,
-        name: name.trim(),
-        university: university,
-        yearOfStudy: yearOfStudy,
-        faculty: faculty,
-        goals: goals ?? [],
-        stressors: stressors ?? [],
-        mayaPersonality: mayaPersonality,
-        checkInTime: checkInTime,
-        therapyExperience: therapyExperience,
-        createdAt: DateTime.now(),
-      );
-      await SupabaseService.upsertProfile(profile);
+      // Write profile row now — it will be readable after email confirmation.
+      // Silently ignored if RLS blocks the write on this Supabase project.
+      try {
+        await SupabaseService.upsertProfile(UserModel(
+          id: user.id,
+          email: normalizedEmail,
+          name: name.trim(),
+          university: university,
+          yearOfStudy: yearOfStudy,
+          faculty: faculty,
+          goals: goals ?? [],
+          stressors: stressors ?? [],
+          mayaPersonality: mayaPersonality,
+          checkInTime: checkInTime,
+          therapyExperience: therapyExperience,
+          createdAt: DateTime.now(),
+        ));
+      } catch (_) {}
 
-      // Always require email verification — send OTP and wait for confirmation
+      // Always require email verification before granting access
       state = state.copyWith(
         status: AuthStatus.pendingVerification,
         pendingEmail: normalizedEmail,
@@ -251,12 +267,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
         errorMessage: 'Registration failed. Please try again.',
       );
       return false;
+    } finally {
+      _suppressAuthStream = false;
     }
   }
 
   // ─── Email Verification ───────────────────────────────
 
-  /// Resend OTP email via Supabase auth.
+  /// Resend signup OTP email via Supabase auth.
   Future<bool> resendVerificationEmail() async {
     final email = state.pendingEmail;
     if (email == null) return false;
@@ -280,7 +298,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  /// Poll Supabase to check if the user has clicked the verification link.
+  /// Poll Supabase to check if the user clicked the verification link.
   Future<bool> checkEmailVerified() async {
     try {
       await SupabaseService.refreshSession();
@@ -342,7 +360,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (state.user == null) return;
     final updated = state.user!.copyWith(onboardingCompleted: true);
     state = state.copyWith(user: updated);
-    // Persist so re-login doesn't loop back to onboarding
     try {
       await SupabaseService.upsertProfile(updated);
     } catch (_) {}
@@ -353,7 +370,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<bool> verifyOtp(String code) async {
     final email = state.pendingEmail;
     if (email == null) return false;
+
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
+
+    // Suppress stream so the signedIn event fired by verifyOTP doesn't race
+    // our own _loadProfile call below.
+    _suppressAuthStream = true;
     try {
       final response = await SupabaseService.verifyOtp(
         email: email,
@@ -367,9 +389,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
         );
         return false;
       }
+
       await _loadProfile(user.id);
-      // Welcome email for email/password signups (profile already exists,
-      // so _loadProfile won't fire it — we send it here instead)
+
+      // Send welcome email now that account is fully created and verified
       final profile = state.user;
       if (profile != null) {
         EmailService.sendWelcomeEmail(
@@ -384,6 +407,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         errorMessage: 'Verification failed. Please try again.',
       );
       return false;
+    } finally {
+      _suppressAuthStream = false;
     }
   }
 
