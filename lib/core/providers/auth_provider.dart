@@ -230,8 +230,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return false;
       }
 
-      // Write profile row now — it will be readable after email confirmation.
-      // Silently ignored if RLS blocks the write on this Supabase project.
+      // Write profile row now (silently ignored if RLS blocks it).
       try {
         await SupabaseService.upsertProfile(UserModel(
           id: user.id,
@@ -249,7 +248,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
         ));
       } catch (_) {}
 
-      // Always require email verification before granting access
+      // Send OTP via signInWithOtp — more reliable than the signup
+      // confirmation email and works regardless of email-confirmation setting.
+      try {
+        await SupabaseService.sendVerificationOtp(normalizedEmail);
+      } catch (_) {}
+
+      // Always require OTP before granting access
       state = state.copyWith(
         status: AuthStatus.pendingVerification,
         pendingEmail: normalizedEmail,

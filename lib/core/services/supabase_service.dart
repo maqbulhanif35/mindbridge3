@@ -40,8 +40,13 @@ class SupabaseService {
   static Future<void> sendPasswordReset(String email) =>
       _auth.resetPasswordForEmail(email);
 
+  /// Sends a 6-digit OTP via the Magic Link flow (more reliable than signup OTP).
+  /// Call this immediately after signUp() and again on resend.
+  static Future<void> sendVerificationOtp(String email) =>
+      _auth.signInWithOtp(email: email, shouldCreateUser: false);
+
   static Future<void> resendVerificationEmail(String email) =>
-      _auth.resend(type: sb.OtpType.signup, email: email);
+      _auth.signInWithOtp(email: email, shouldCreateUser: false);
 
   static Future<sb.AuthResponse> verifyOtp({
     required String email,
@@ -50,7 +55,7 @@ class SupabaseService {
       _auth.verifyOTP(
         email: email,
         token: token,
-        type: sb.OtpType.signup,
+        type: sb.OtpType.email, // matches signInWithOtp delivery
       );
 
   static Future<void> refreshSession() => _auth.refreshSession();
