@@ -9,8 +9,10 @@ import 'package:lucide_flutter/lucide_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/models/mood_model.dart';
+import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/mood_provider.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/goal_plan_engine.dart';
 
 // ─── Filter type ──────────────────────────────────────────
 
@@ -386,6 +388,15 @@ class _EntriesTab extends StatelessWidget {
         SliverToBoxAdapter(
           child: _PromptBanner(onTap: onNewEntry).animate().fadeIn(delay: 100.ms),
         ),
+
+        // ── Writing Milestones ──
+        if (allEntries.isNotEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _WritingMilestones(entries: allEntries).animate().fadeIn(delay: 120.ms),
+            ),
+          ),
 
         // ── Filter Bar ──
         if (allEntries.isNotEmpty)
@@ -874,27 +885,17 @@ class _AnalyticsTab extends StatelessWidget {
 
 // ─── Insights Tab ─────────────────────────────────────────
 
-class _InsightsTab extends StatefulWidget {
+class _InsightsTab extends ConsumerStatefulWidget {
   final List<JournalEntry> entries;
   final int streak;
   const _InsightsTab({required this.entries, required this.streak});
 
   @override
-  State<_InsightsTab> createState() => _InsightsTabState();
+  ConsumerState<_InsightsTab> createState() => _InsightsTabState();
 }
 
-class _InsightsTabState extends State<_InsightsTab> {
+class _InsightsTabState extends ConsumerState<_InsightsTab> {
   int _expandedPrompt = -1;
-
-  static const _prompts = [
-    ('What am I most proud of this week?', 'Reflect on achievements, big or small.'),
-    ('Where do I feel most stuck right now?', 'Identify the obstacle clearly to begin moving past it.'),
-    ('What would I tell a friend in my exact situation?', 'Often the advice we give others is what we need most.'),
-    ('What drains my energy vs. what restores it?', 'Map out your energy patterns to make better choices.'),
-    ('What am I avoiding thinking about?', 'Avoidance is often a signal worth exploring.'),
-    ('What does my ideal day look like?', 'Clarity on your vision helps you move toward it.'),
-    ('How am I different from who I was 6 months ago?', 'Growth is often invisible until you look back.'),
-  ];
 
   String _bestWritingTime() {
     if (widget.entries.isEmpty) return 'Not enough data';
@@ -941,6 +942,10 @@ class _InsightsTabState extends State<_InsightsTab> {
         : corr < -0.3
             ? 'Longer entries → lower mood 📉'
             : 'No clear writing–mood link yet';
+
+    // Goal-aware personalized prompts
+    final user = ref.watch(currentUserProvider);
+    final prompts = GoalPlanEngine.getJournalPrompts(user, max: 8);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
@@ -1121,13 +1126,13 @@ class _InsightsTabState extends State<_InsightsTab> {
         const SizedBox(height: 20),
 
         // ── Prompts Bank ──
-        const Padding(
-          padding: EdgeInsets.only(bottom: 12),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
           child: Row(
             children: [
-              Icon(LucideIcons.lightbulb, size: 16, color: AppColors.tertiary),
-              SizedBox(width: 6),
-              Text(
+              const Icon(LucideIcons.lightbulb, size: 16, color: AppColors.tertiary),
+              const SizedBox(width: 6),
+              const Text(
                 'WRITING PROMPTS',
                 style: TextStyle(
                   fontFamily: 'Nunito',
@@ -1137,11 +1142,36 @@ class _InsightsTabState extends State<_InsightsTab> {
                   letterSpacing: 0.8,
                 ),
               ),
+              const Spacer(),
+              if (user != null && user.goals.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryContainer,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(LucideIcons.target, size: 10, color: AppColors.primary),
+                      const SizedBox(width: 3),
+                      Text(
+                        'matched to your goals',
+                        style: const TextStyle(
+                          fontFamily: 'Nunito',
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         ),
 
-        ..._prompts.asMap().entries.map((entry) {
+        ...prompts.asMap().entries.map((entry) {
           final i = entry.key;
           final (q, hint) = entry.value;
           final isExpanded = _expandedPrompt == i;
@@ -1424,108 +1454,142 @@ class _HeroStats extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.surface,
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: [Color(0xFF0F766E), Color(0xFF0D9488), Color(0xFF14B8A6)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(color: const Color(0xFF0D9488).withAlpha(80), blurRadius: 20, offset: const Offset(0, 8)),
+        ],
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              Container(
+                width: 52, height: 52,
+                decoration: BoxDecoration(
+                  color: Colors.white.withAlpha(30),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Center(child: Text('📖', style: TextStyle(fontSize: 26))),
+              ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '$total',
-                      style: const TextStyle(
-                        fontFamily: 'Nunito',
-                        fontSize: 40,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.textPrimary,
-                        height: 1.0,
-                      ),
-                    ),
-                    const Text(
-                      'entries written',
-                      style: TextStyle(
-                        fontFamily: 'Nunito',
-                        fontSize: 14,
-                        color: AppColors.textMuted,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    Text('$total ${total == 1 ? 'entry' : 'entries'}',
+                      style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, fontFamily: 'Nunito')),
+                    const Text('in your journal', style: TextStyle(color: Colors.white70, fontSize: 12, fontFamily: 'Nunito')),
                   ],
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: streak >= 3 ? const Color(0xFFFFF3E0) : AppColors.primaryContainer,
+                  color: Colors.white.withAlpha(35),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: streak >= 3 ? const Color(0xFFFF6B35) : AppColors.primary,
-                    width: 1.5,
-                  ),
+                  border: Border.all(color: Colors.white.withAlpha(60)),
                 ),
                 child: Column(
                   children: [
                     Text(streak >= 3 ? '🔥' : '⚡', style: const TextStyle(fontSize: 22)),
                     const SizedBox(height: 2),
-                    Text(
-                      '$streak',
-                      style: TextStyle(
-                        fontFamily: 'Nunito',
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: streak >= 3 ? const Color(0xFFFF6B35) : AppColors.primary,
-                        height: 1.0,
-                      ),
-                    ),
-                    Text(
-                      streak == 1 ? 'day' : 'days',
-                      style: const TextStyle(
-                        fontFamily: 'Nunito',
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textMuted,
-                      ),
-                    ),
+                    Text('$streak', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900, fontFamily: 'Nunito', height: 1.0)),
+                    const Text('day streak', style: TextStyle(color: Colors.white70, fontSize: 9, fontFamily: 'Nunito', fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           Row(
             children: [
-              _MiniStat(
-                icon: LucideIcons.calendarDays,
-                value: '$thisMonth',
-                label: 'this month',
-                color: AppColors.primary,
-              ),
-              const SizedBox(width: 12),
-              _MiniStat(
-                icon: LucideIcons.type,
-                value: formatWords(totalWords),
-                label: 'total words',
-                color: const Color(0xFF0EA5E9),
-              ),
-              const SizedBox(width: 12),
-              _MiniStat(
-                icon: LucideIcons.sparkles,
-                value: total > 0
-                    ? '${((total / 30) * 100).clamp(0, 100).round()}%'
-                    : '0%',
-                label: 'consistency',
-                color: AppColors.tertiary,
-              ),
+              _GlassStat(icon: LucideIcons.calendarDays, value: '$thisMonth', label: 'this month'),
+              const SizedBox(width: 10),
+              _GlassStat(icon: LucideIcons.type, value: formatWords(totalWords), label: 'total words'),
+              const SizedBox(width: 10),
+              _GlassStat(icon: LucideIcons.target, value: total > 0 ? '${((thisMonth / 30) * 100).clamp(0, 100).round()}%' : '0%', label: 'consistency'),
             ],
           ),
+          if (thisMonth < 20) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(20),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(LucideIcons.target, size: 14, color: Colors.white70),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Monthly Goal: 20 entries', style: TextStyle(color: Colors.white70, fontSize: 11, fontFamily: 'Nunito')),
+                        const SizedBox(height: 4),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: (thisMonth / 20).clamp(0.0, 1.0),
+                            backgroundColor: Colors.white.withAlpha(40),
+                            valueColor: const AlwaysStoppedAnimation(Colors.white),
+                            minHeight: 6,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text('$thisMonth/20', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800, fontFamily: 'Nunito')),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
+}
+
+class _GlassStat extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+  const _GlassStat({required this.icon, required this.value, required this.label});
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(25),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withAlpha(40)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 13, color: Colors.white70),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(value, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900, fontFamily: 'Nunito', height: 1.0)),
+                Text(label, style: const TextStyle(color: Colors.white60, fontSize: 9, fontFamily: 'Nunito', fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _MiniStat extends StatelessWidget {
@@ -1667,76 +1731,53 @@ class _PromptBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final prompt = AppStrings
-        .journalPrompts[DateTime.now().day % AppStrings.journalPrompts.length];
-
+    final idx = DateTime.now().day % AppStrings.journalPrompts.length;
+    final prompt = AppStrings.journalPrompts[idx];
+    const gradients = [
+      [Color(0xFF667EEA), Color(0xFF764BA2)],
+      [Color(0xFFF093FB), Color(0xFFF5576C)],
+      [Color(0xFF4FACFE), Color(0xFF00F2FE)],
+      [Color(0xFF43E97B), Color(0xFF38F9D7)],
+      [Color(0xFFFA709A), Color(0xFFFEE140)],
+    ];
+    final grad = gradients[idx % gradients.length];
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 14, 16, 6),
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          gradient: AppColors.heroGradient,
+          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: grad),
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withOpacity(0.20),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
+          boxShadow: [BoxShadow(color: grad[0].withAlpha(80), blurRadius: 16, offset: const Offset(0, 6))],
         ),
         child: Row(
           children: [
             Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Center(child: Text('✍️', style: TextStyle(fontSize: 26))),
+              width: 52, height: 52,
+              decoration: BoxDecoration(color: Colors.white.withAlpha(35), borderRadius: BorderRadius.circular(16)),
+              child: const Center(child: Text('💭', style: TextStyle(fontSize: 26))),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Today's Writing Prompt",
-                    style: TextStyle(
-                      fontFamily: 'Nunito',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white70,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
+                  const Text("Today's Prompt", style: TextStyle(fontFamily: 'Nunito', fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white70, letterSpacing: 0.5)),
                   const SizedBox(height: 4),
-                  Text(
-                    prompt,
-                    style: const TextStyle(
-                      fontFamily: 'Nunito',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                      height: 1.4,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  Text(prompt, style: const TextStyle(fontFamily: 'Nunito', fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white, height: 1.4), maxLines: 2, overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
             const SizedBox(width: 8),
             Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.25),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(LucideIcons.arrowRight, size: 18, color: Colors.white),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(color: Colors.white.withAlpha(35), borderRadius: BorderRadius.circular(12)),
+              child: const Column(children: [
+                Icon(LucideIcons.penLine, size: 14, color: Colors.white),
+                SizedBox(height: 2),
+                Text('Write', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700, fontFamily: 'Nunito')),
+              ]),
             ),
           ],
         ),
@@ -1752,27 +1793,21 @@ class _SectionLabel extends StatelessWidget {
   const _SectionLabel({required this.label});
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 18, bottom: 8),
-      child: Row(
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: const TextStyle(
-              fontFamily: 'Nunito',
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textMuted,
-              letterSpacing: 1.0,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(child: Container(height: 1, color: AppColors.border)),
-        ],
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 20, bottom: 8),
+    child: Row(children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.primaryContainer,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(label.toUpperCase(), style: const TextStyle(fontFamily: 'Nunito', fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primary, letterSpacing: 0.8)),
       ),
-    );
-  }
+      const SizedBox(width: 10),
+      Expanded(child: Container(height: 1, color: AppColors.border)),
+    ]),
+  );
 }
 
 // ─── Journal Card ─────────────────────────────────────────
@@ -1853,17 +1888,14 @@ class _JournalCard extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          margin: const EdgeInsets.only(bottom: 12),
+          margin: const EdgeInsets.only(bottom: 14),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: _moodColor.withAlpha(60)),
             boxShadow: [
-              BoxShadow(
-                color: AppColors.shadowCard,
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
+              BoxShadow(color: _moodColor.withAlpha(25), blurRadius: 16, offset: const Offset(0, 5)),
+              BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 8, offset: const Offset(0, 2)),
             ],
           ),
           clipBehavior: Clip.antiAlias,
@@ -1871,128 +1903,79 @@ class _JournalCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Left mood bar
-                Container(width: 5, color: _moodColor),
-
-                // Content
+                Container(
+                  width: 6,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                      colors: [_moodColor, _moodColor.withAlpha(160)],
+                    ),
+                  ),
+                ),
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Header
-                        Row(
-                          children: [
-                            if (entry.moodScore != null) ...[
-                              Text(
-                                AppStrings.moodEmojis[entry.moodScore!],
-                                style: const TextStyle(fontSize: 20),
+                        Row(children: [
+                          if (entry.moodScore != null) ...[
+                            Container(
+                              width: 36, height: 36,
+                              decoration: BoxDecoration(
+                                color: _moodColor.withAlpha(20),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: _moodColor.withAlpha(60)),
                               ),
-                              const SizedBox(width: 8),
-                            ],
-                            Expanded(
-                              child: Text(
-                                entry.displayTitle,
-                                style: const TextStyle(
-                                  fontFamily: 'Nunito',
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.textPrimary,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              child: Center(child: Text(AppStrings.moodEmojis[entry.moodScore!], style: const TextStyle(fontSize: 18))),
                             ),
-                            const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: () {
-                                HapticFeedback.lightImpact();
-                                onBookmark();
-                              },
-                              child: Icon(
-                                isBookmarked
-                                    ? LucideIcons.bookmarkCheck
-                                    : LucideIcons.bookmark,
-                                size: 16,
-                                color: isBookmarked
-                                    ? AppColors.primary
-                                    : AppColors.textMuted,
-                              ),
-                            ),
+                            const SizedBox(width: 10),
                           ],
-                        ),
-
-                        const SizedBox(height: 4),
-
-                        Text(
-                          dateStr,
-                          style: const TextStyle(
-                            fontFamily: 'Nunito',
-                            fontSize: 11,
-                            color: AppColors.textMuted,
-                            fontWeight: FontWeight.w600,
+                          Expanded(child: Text(entry.displayTitle,
+                            style: const TextStyle(fontFamily: 'Nunito', fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+                            maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () { HapticFeedback.lightImpact(); onBookmark(); },
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: isBookmarked ? AppColors.primary.withAlpha(18) : const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(isBookmarked ? LucideIcons.bookmarkCheck : LucideIcons.bookmark,
+                                size: 15, color: isBookmarked ? AppColors.primary : const Color(0xFF94A3B8)),
+                            ),
                           ),
-                        ),
-
+                        ]),
+                        const SizedBox(height: 6),
+                        Row(children: [
+                          Icon(LucideIcons.clock, size: 10, color: _moodColor.withAlpha(150)),
+                          const SizedBox(width: 4),
+                          Text(dateStr, style: TextStyle(fontFamily: 'Nunito', fontSize: 11, color: _moodColor.withAlpha(180), fontWeight: FontWeight.w600)),
+                          const SizedBox(width: 10),
+                          _DepthBadge(wordCount: _wordCount),
+                        ]),
                         const SizedBox(height: 10),
-
-                        // Preview
-                        Text(
-                          entry.content,
-                          style: const TextStyle(
-                            fontFamily: 'Nunito',
-                            fontSize: 13,
-                            color: AppColors.textSecondary,
-                            height: 1.55,
-                          ),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-
+                        Text(entry.content,
+                          style: const TextStyle(fontFamily: 'Nunito', fontSize: 13, color: Color(0xFF475569), height: 1.55),
+                          maxLines: 3, overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 12),
-
-                        // Footer chips
-                        Row(
-                          children: [
-                            _Chip(icon: LucideIcons.type, label: '$_wordCount words'),
-                            const SizedBox(width: 6),
-                            _Chip(icon: LucideIcons.clock, label: _readingTime),
-                            if (entry.aiInsight != null) ...[
-                              const SizedBox(width: 6),
-                              _Chip(
-                                icon: LucideIcons.sparkles,
-                                label: 'AI insight',
-                                isPrimary: true,
-                              ),
-                            ],
-                            if (entry.isPrivate) ...[
-                              const SizedBox(width: 6),
-                              _Chip(icon: LucideIcons.lock, label: 'Private'),
-                            ],
-                            const Spacer(),
-                            ...entry.tags.take(2).map((tag) => Padding(
-                                  padding: const EdgeInsets.only(left: 5),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primaryContainer,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      '#$tag',
-                                      style: const TextStyle(
-                                        fontFamily: 'Nunito',
-                                        fontSize: 10,
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                )),
-                          ],
-                        ),
+                        Row(children: [
+                          _Chip(icon: LucideIcons.type, label: '$_wordCount words'),
+                          const SizedBox(width: 6),
+                          _Chip(icon: LucideIcons.clock, label: _readingTime),
+                          if (entry.aiInsight != null) ...[const SizedBox(width: 6), _Chip(icon: LucideIcons.sparkles, label: 'AI', isPrimary: true)],
+                          const Spacer(),
+                          ...entry.tags.take(2).map((tag) => Padding(
+                            padding: const EdgeInsets.only(left: 5),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(color: AppColors.primaryContainer, borderRadius: BorderRadius.circular(20)),
+                              child: Text('#$tag', style: const TextStyle(fontFamily: 'Nunito', fontSize: 10, color: AppColors.primary, fontWeight: FontWeight.w700)),
+                            ),
+                          )),
+                        ]),
                       ],
                     ),
                   ),
@@ -2037,6 +2020,147 @@ class _Chip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Depth Badge ──────────────────────────────────────────
+
+class _DepthBadge extends StatelessWidget {
+  final int wordCount;
+  const _DepthBadge({required this.wordCount});
+
+  @override
+  Widget build(BuildContext context) {
+    final String label;
+    final Color color;
+
+    if (wordCount >= 100) {
+      label = 'Deep 🌊';
+      color = AppColors.primary;
+    } else if (wordCount >= 30) {
+      label = 'Medium ✨';
+      color = const Color(0xFFF59E0B);
+    } else {
+      label = 'Quick ⚡';
+      color = const Color(0xFF94A3B8);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withAlpha(18),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withAlpha(50)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontFamily: 'Nunito',
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Writing Milestones ───────────────────────────────────
+
+class _WritingMilestones extends StatelessWidget {
+  final List<JournalEntry> entries;
+  const _WritingMilestones({required this.entries});
+
+  int get _totalWords => entries.fold<int>(
+        0,
+        (s, e) =>
+            s + e.content.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length,
+      );
+
+  int _streak() {
+    if (entries.isEmpty) return 0;
+    final days = entries
+        .map((e) => DateTime(e.createdAt.year, e.createdAt.month, e.createdAt.day))
+        .toSet()
+        .toList()
+      ..sort((a, b) => b.compareTo(a));
+    final today = DateTime.now();
+    final todayN = DateTime(today.year, today.month, today.day);
+    if (todayN.difference(days.first).inDays > 1) return 0;
+    int streak = 0;
+    DateTime exp = days.first;
+    for (final d in days) {
+      if (d == exp) {
+        streak++;
+        exp = exp.subtract(const Duration(days: 1));
+      } else {
+        break;
+      }
+    }
+    return streak;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = entries.length;
+    final words = _totalWords;
+    final streak = _streak();
+
+    final milestones = [
+      (icon: '🌱', label: 'First Entry', earned: total >= 1),
+      (icon: '🔥', label: '7-Day Streak', earned: streak >= 7),
+      (icon: '📚', label: '50 Entries', earned: total >= 50),
+      (icon: '✍️', label: '1k Words', earned: words >= 1000),
+      (icon: '🏆', label: '30-Day Streak', earned: streak >= 30),
+    ];
+
+    return SizedBox(
+      height: 72,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: milestones.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (ctx, i) {
+          final m = milestones[i];
+          return AnimatedOpacity(
+            duration: const Duration(milliseconds: 350),
+            opacity: m.earned ? 1.0 : 0.38,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: m.earned ? AppColors.primaryContainer : AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: m.earned
+                      ? AppColors.primary.withAlpha(60)
+                      : AppColors.border.withAlpha(80),
+                ),
+                boxShadow: m.earned
+                    ? [BoxShadow(color: AppColors.primary.withAlpha(20), blurRadius: 8)]
+                    : [],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(m.icon, style: const TextStyle(fontSize: 18)),
+                  const SizedBox(width: 8),
+                  Text(
+                    m.label,
+                    style: TextStyle(
+                      fontFamily: 'Nunito',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: m.earned ? AppColors.primary : AppColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

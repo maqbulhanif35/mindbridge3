@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/models/message_model.dart';
+import '../../../core/models/streak_model.dart';
 import '../../../core/providers/chat_provider.dart';
+import '../../../core/providers/streak_provider.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/design_tokens.dart';
 
@@ -99,6 +102,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final finalText = _justListenMode
         ? '[Just listen mode - please only validate and reflect, do not give advice] $text'
         : text;
+    // Record chat streak on first message of the day
+    final streakState = ref.read(streakProvider);
+    if (!(streakState.streak(StreakType.chatSession)?.completedToday ?? false)) {
+      ref.read(streakProvider.notifier).recordActivity(StreakType.chatSession);
+    }
     await ref.read(chatProvider.notifier).sendMessage(finalText);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
@@ -123,7 +131,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
-        backgroundColor: context.tokenBackground,
+        backgroundColor: const Color(0xFFF7F7F8),
         body: Column(
           children: [
             _ChatHeader(
@@ -245,144 +253,162 @@ class _ChatHeader extends StatelessWidget {
   String get _statusText => switch (streamState) {
         MayaStreamState.thinking => 'Thinking...',
         MayaStreamState.streaming => 'Responding...',
-        MayaStreamState.idle => 'Here for you',
+        MayaStreamState.idle => 'Online',
       };
 
   Color get _statusColor => switch (streamState) {
-        MayaStreamState.thinking => const Color(0xFFFFD166),
-        MayaStreamState.streaming => const Color(0xFF4ECDC4),
-        MayaStreamState.idle => const Color(0xFF06D6A0),
+        MayaStreamState.thinking => const Color(0xFFF59E0B),
+        MayaStreamState.streaming => AppColors.primary,
+        MayaStreamState.idle => const Color(0xFF10B981),
       };
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.primaryDark, AppColors.primary, Color(0xFF0EA5E9)],
-        ),
-      ),
+      color: Colors.white,
       child: SafeArea(
         bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-              Spacing.md, Spacing.xs, Spacing.sm, Spacing.md),
-          child: Row(
-            children: [
-              // Maya avatar
-              Stack(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+              child: Row(
                 children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF4ECDC4), AppColors.primary],
+                  // Maya avatar — "M" initial
+                  Stack(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Color(0xFF009E95),
+                              AppColors.primary,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'M',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 19,
+                              fontWeight: FontWeight.w900,
+                              fontFamily: 'Nunito',
+                            ),
+                          ),
+                        ),
                       ),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Center(
-                      child: Icon(LucideIcons.bot,
-                          size: 24, color: Colors.white),
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: AnimatedContainer(
+                          duration: Duration(milliseconds: 300),
+                          width: 11,
+                          height: 11,
+                          decoration: BoxDecoration(
+                            color: _statusColor,
+                            shape: BoxShape.circle,
+                            border:
+                                Border.all(color: Colors.white, width: 2),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Name + status
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Maya',
+                          style: TextStyle(
+                            fontFamily: 'Nunito',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimary,
+                            height: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 300),
+                          child: Row(
+                            key: ValueKey(streamState),
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (streamState != MayaStreamState.idle)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 5),
+                                  child: SizedBox(
+                                    width: 10,
+                                    height: 10,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.5,
+                                      valueColor:
+                                          AlwaysStoppedAnimation(_statusColor),
+                                    ),
+                                  ),
+                                ),
+                              Text(
+                                _statusText,
+                                style: TextStyle(
+                                  fontFamily: 'Nunito',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: _statusColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: AnimatedContainer(
-                      duration: 300.ms,
-                      width: 13,
-                      height: 13,
-                      decoration: BoxDecoration(
-                        color: _statusColor,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                    ),
+
+                  // Action buttons — clean icon-only
+                  _HeaderBtn(
+                    icon: LucideIcons.layoutGrid,
+                    onTap: onNavigate,
+                    tooltip: 'Navigate',
+                  ),
+                  _HeaderBtn(
+                    icon: justListenMode
+                        ? LucideIcons.ear
+                        : LucideIcons.earOff,
+                    onTap: onToggleListenMode,
+                    tooltip: justListenMode
+                        ? 'Exit listen mode'
+                        : 'Just listen mode',
+                    color: justListenMode
+                        ? const Color(0xFFF59E0B)
+                        : AppColors.textMuted,
+                  ),
+                  _HeaderBtn(
+                    icon: LucideIcons.squarePen,
+                    onTap: onNewChat,
+                    tooltip: 'New chat',
+                  ),
+                  _HeaderBtn(
+                    icon: LucideIcons.phoneCall,
+                    onTap: onCrisis,
+                    tooltip: 'Crisis support',
+                    color: AppColors.error,
                   ),
                 ],
               ),
-
-              const SizedBox(width: Spacing.sm),
-
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Maya',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                    AnimatedSwitcher(
-                      duration: 300.ms,
-                      child: Row(
-                        key: ValueKey(streamState),
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (streamState != MayaStreamState.idle)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: SizedBox(
-                                width: 12,
-                                height: 12,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 1.5,
-                                  valueColor:
-                                      AlwaysStoppedAnimation(_statusColor),
-                                ),
-                              ),
-                            ),
-                          Text(
-                            _statusText,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: _statusColor,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Actions
-              _HeaderBtn(
-                icon: LucideIcons.layoutGrid,
-                onTap: onNavigate,
-                tooltip: 'Navigate',
-              ),
-              const SizedBox(width: Spacing.xs),
-              _HeaderBtn(
-                icon: justListenMode ? LucideIcons.ear : LucideIcons.earOff,
-                onTap: onToggleListenMode,
-                tooltip: justListenMode ? 'Exit listen mode' : 'Just listen mode',
-                color: justListenMode ? const Color(0xFFFFD166) : Colors.white,
-              ),
-              const SizedBox(width: Spacing.xs),
-              _HeaderBtn(
-                icon: LucideIcons.squarePen,
-                onTap: onNewChat,
-                tooltip: 'New Chat',
-              ),
-              const SizedBox(width: Spacing.xs),
-              _HeaderBtn(
-                icon: LucideIcons.phoneCall,
-                onTap: onCrisis,
-                tooltip: 'Crisis Support',
-                color: const Color(0xFFFF8A80),
-              ),
-            ],
-          ),
+            ),
+            const Divider(height: 1, thickness: 1, color: Color(0xFFF0F0F0)),
+          ],
         ),
       ),
     );
@@ -399,25 +425,20 @@ class _HeaderBtn extends StatelessWidget {
     required this.icon,
     required this.onTap,
     required this.tooltip,
-    this.color = Colors.white,
+    this.color = AppColors.textMuted,
   });
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.15),
-            borderRadius: AppRadius.smAll,
-            border: Border.all(color: Colors.white.withOpacity(0.2)),
-          ),
-          child: Icon(icon, color: color, size: 18),
-        ),
+      child: IconButton(
+        onPressed: onTap,
+        icon: Icon(icon, color: color, size: 20),
+        padding: const EdgeInsets.all(8),
+        constraints:
+            const BoxConstraints(minWidth: 38, minHeight: 38),
+        splashRadius: 20,
       ),
     );
   }
@@ -504,111 +525,157 @@ class _MessageBubble extends StatelessWidget {
     final isUser = message.isFromUser;
     return Padding(
       padding: EdgeInsets.only(
-        top: isFirstInGroup ? Spacing.sm : 3,
-        left: isUser ? 64 : 0,
-        right: isUser ? 0 : 64,
+        top: isFirstInGroup ? 16 : 4,
+        bottom: 2,
       ),
       child: Column(
         crossAxisAlignment:
             isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
+          // Maya label row
           if (isFirstInGroup && !isUser)
             Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 5),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF4ECDC4), AppColors.primary],
-                      ),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(LucideIcons.bot,
-                        size: 14, color: Colors.white),
-                  ),
-                  const SizedBox(width: Spacing.xs),
-                  Text(
-                    'Maya',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: context.tokenTextMuted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          GestureDetector(
-            onLongPress: () {
-              HapticFeedback.mediumImpact();
-              Clipboard.setData(ClipboardData(text: message.content));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Copied to clipboard'),
-                  duration: const Duration(seconds: 2),
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: Spacing.md, vertical: Spacing.sm),
-              decoration: BoxDecoration(
-                gradient: isUser
-                    ? const LinearGradient(
-                        colors: [AppColors.primary, AppColors.primaryLight],
-                      )
-                    : null,
-                color: isUser ? null : context.tokenSurface,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(20),
-                  topRight: const Radius.circular(20),
-                  bottomLeft: isUser
-                      ? const Radius.circular(20)
-                      : const Radius.circular(4),
-                  bottomRight: isUser
-                      ? const Radius.circular(4)
-                      : const Radius.circular(20),
-                ),
-                border: isUser
-                    ? null
-                    : Border.all(color: context.tokenBorder),
-                boxShadow: [
-                  BoxShadow(
-                    color: isUser
-                        ? AppColors.primary.withOpacity(0.2)
-                        : Colors.black.withOpacity(0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
+              padding: const EdgeInsets.only(left: 52, bottom: 4),
               child: Text(
-                message.content,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: isUser ? Colors.white : context.tokenTextPrimary,
-                  height: 1.5,
+                'Maya',
+                style: const TextStyle(
+                  fontFamily: 'Nunito',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textMuted,
                 ),
               ),
             ),
-          )
-              .animate()
-              .fadeIn(duration: 250.ms)
-              .slideY(begin: 0.15, end: 0, curve: Curves.easeOutCubic),
+
+          Row(
+            mainAxisAlignment:
+                isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // Maya avatar (only on first in group)
+              if (!isUser)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: isFirstInGroup
+                      ? Container(
+                          width: 36,
+                          height: 36,
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Color(0xFF009E95), AppColors.primary],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'M',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                fontFamily: 'Nunito',
+                              ),
+                            ),
+                          ),
+                        )
+                      : const SizedBox(width: 36),
+                ),
+
+              // Bubble
+              GestureDetector(
+                onLongPress: () {
+                  HapticFeedback.mediumImpact();
+                  Clipboard.setData(
+                      ClipboardData(text: message.content));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Copied to clipboard'),
+                      duration: const Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  );
+                },
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth:
+                        MediaQuery.of(context).size.width * (isUser ? 0.72 : 0.80),
+                  ),
+                  child: isUser
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 11),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [
+                                AppColors.primaryDark,
+                                AppColors.primary
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(18),
+                              topRight: Radius.circular(18),
+                              bottomLeft: Radius.circular(18),
+                              bottomRight: Radius.circular(4),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withOpacity(0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: _MarkdownRenderer(
+                              content: message.content, isUser: true),
+                        )
+                      : Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(4),
+                              topRight: Radius.circular(18),
+                              bottomLeft: Radius.circular(18),
+                              bottomRight: Radius.circular(18),
+                            ),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x0C000000),
+                                blurRadius: 10,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: _MarkdownRenderer(
+                              content: message.content, isUser: false),
+                        ),
+                ),
+              )
+                  .animate()
+                  .fadeIn(duration: 250.ms)
+                  .slideY(
+                      begin: 0.1,
+                      end: 0,
+                      curve: Curves.easeOutCubic),
+            ],
+          ),
 
           // Inline exercise card
           if (_suggestsExercise)
-            _InlineExerciseCard(onTap: onExerciseTap)
-                .animate()
-                .fadeIn(delay: 300.ms)
-                .slideY(begin: 0.2),
+            Padding(
+              padding: const EdgeInsets.only(left: 44, top: 8),
+              child: _InlineExerciseCard(onTap: onExerciseTap)
+                  .animate()
+                  .fadeIn(delay: 300.ms)
+                  .slideY(begin: 0.15),
+            ),
         ],
       ),
     );
@@ -711,86 +778,87 @@ class _StreamingBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(
-          top: Spacing.sm, right: 64),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.only(top: 16, bottom: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
+          // Avatar
           Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 5),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFF4ECDC4), AppColors.primary],
-                    ),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(LucideIcons.bot,
-                      size: 14, color: Colors.white),
+            padding: const EdgeInsets.only(right: 8),
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF009E95), AppColors.primary],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                const SizedBox(width: Spacing.xs),
-                Text(
-                  'Maya',
+                shape: BoxShape.circle,
+              ),
+              child: const Center(
+                child: Text(
+                  'M',
                   style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: context.tokenTextMuted,
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    fontFamily: 'Nunito',
                   ),
                 ),
-              ],
+              ),
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.md, vertical: Spacing.sm),
-            decoration: BoxDecoration(
-              color: context.tokenSurface,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-                bottomLeft: Radius.circular(4),
-                bottomRight: Radius.circular(20),
+          // Bubble
+          Flexible(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.80,
               ),
-              border: Border.all(color: context.tokenBorder),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Flexible(
-                  child: Text(
-                    content,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: context.tokenTextPrimary,
-                      height: 1.5,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(4),
+                    topRight: Radius.circular(18),
+                    bottomLeft: Radius.circular(18),
+                    bottomRight: Radius.circular(18),
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x0C000000),
+                      blurRadius: 10,
+                      offset: Offset(0, 2),
                     ),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 4),
-                // Cursor blink
-                Container(
-                  width: 2,
-                  height: 16,
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary,
-                  ),
-                )
-                    .animate(onPlay: (c) => c.repeat())
-                    .fadeIn(duration: 500.ms)
-                    .then()
-                    .fadeOut(duration: 500.ms),
-              ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _MarkdownRenderer(content: content, isUser: false),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: 2,
+                      height: 14,
+                      decoration: const BoxDecoration(
+                          color: AppColors.primary),
+                    )
+                        .animate(onPlay: (c) => c.repeat())
+                        .fadeIn(duration: 500.ms)
+                        .then()
+                        .fadeOut(duration: 500.ms),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
       ),
-    );
+    ).animate().fadeIn(duration: 200.ms);
   }
 }
 
@@ -825,34 +893,53 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator>
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: Spacing.sm, right: 64),
+      padding: const EdgeInsets.only(top: 16, bottom: 2),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF4ECDC4), AppColors.primary],
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF009E95), AppColors.primary],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
               ),
-              shape: BoxShape.circle,
+              child: const Center(
+                child: Text(
+                  'M',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    fontFamily: 'Nunito',
+                  ),
+                ),
+              ),
             ),
-            child: const Icon(LucideIcons.bot, size: 14, color: Colors.white),
           ),
-          const SizedBox(width: Spacing.xs),
           Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.md, vertical: Spacing.sm),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             decoration: BoxDecoration(
-              color: context.tokenSurface,
+              color: Colors.white,
               borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-                bottomLeft: Radius.circular(4),
-                bottomRight: Radius.circular(20),
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(18),
+                bottomLeft: Radius.circular(18),
+                bottomRight: Radius.circular(18),
               ),
-              border: Border.all(color: context.tokenBorder),
+              boxShadow: const [
+                BoxShadow(
+                    color: Color(0x0C000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 2)),
+              ],
             ),
             child: AnimatedBuilder(
               animation: _ctrl,
@@ -869,7 +956,7 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator>
                   return Container(
                     width: 8,
                     height: 8,
-                    margin: EdgeInsets.only(right: i < 2 ? 4 : 0),
+                    margin: EdgeInsets.only(right: i < 2 ? 5 : 0),
                     decoration: BoxDecoration(
                       color: AppColors.primary.withOpacity(opacity),
                       shape: BoxShape.circle,
@@ -891,95 +978,150 @@ class _EmptyState extends StatelessWidget {
   final ValueChanged<String> onSuggestionTap;
   const _EmptyState({required this.onSuggestionTap});
 
+  static const _suggestions = [
+    ("I'm feeling anxious about exams", LucideIcons.bookOpen),
+    ("I can't sleep and my mind won't stop", LucideIcons.moon),
+    ("I just need to vent about something", LucideIcons.messageCircle),
+    ("Help me with a breathing exercise", LucideIcons.wind),
+    ("I'm feeling really low today", LucideIcons.heart),
+    ("Tips for managing HELB stress", LucideIcons.wallet),
+  ];
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(Spacing.xl),
+      padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const SizedBox(height: Spacing.xl),
-
+          // Avatar
           Container(
-            width: 100,
-            height: 100,
+            width: 72,
+            height: 72,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF4ECDC4), AppColors.primary],
+                colors: [Color(0xFF009E95), AppColors.primary],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
               shape: BoxShape.circle,
-              boxShadow: AppShadow.coloredMd(AppColors.primary),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-            child: const Icon(LucideIcons.bot,
-                size: 50, color: Colors.white),
-          ).animate().scale(duration: 600.ms, curve: Curves.elasticOut),
+            child: const Center(
+              child: Text(
+                'M',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 32,
+                  fontWeight: FontWeight.w900,
+                  fontFamily: 'Nunito',
+                ),
+              ),
+            ),
+          ).animate().scale(duration: 500.ms, curve: Curves.easeOutBack),
 
-          const SizedBox(height: Spacing.lg),
+          const SizedBox(height: 20),
 
           Text(
-            "Hi, I'm Maya 👋",
-            style: TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-              color: context.tokenTextPrimary,
+            "Hi, I'm Maya",
+            style: const TextStyle(
+              fontFamily: 'Nunito',
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              color: AppColors.textPrimary,
+            ),
+          ).animate().fadeIn(delay: 200.ms),
+
+          const SizedBox(height: 8),
+
+          Text(
+            "Your AI wellness companion — here to listen,\nsupport, and guide you.",
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontFamily: 'Nunito',
+              fontSize: 14,
+              color: AppColors.textSecondary,
+              height: 1.6,
             ),
           ).animate().fadeIn(delay: 300.ms),
 
-          const SizedBox(height: Spacing.xs),
-
-          Text(
-            "I'm your AI wellness companion. Share what's on your mind — I'll listen without judgment.",
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 15,
-              color: context.tokenTextSecondary,
-              height: 1.6,
-            ),
-          ).animate().fadeIn(delay: 400.ms),
-
-          const SizedBox(height: Spacing.xl),
+          const SizedBox(height: 32),
 
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              "Try asking...",
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: context.tokenTextMuted,
-                letterSpacing: 0.5,
+              'Suggested',
+              style: const TextStyle(
+                fontFamily: 'Nunito',
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textMuted,
+                letterSpacing: 0.8,
               ),
             ),
-          ),
+          ).animate().fadeIn(delay: 400.ms),
 
-          const SizedBox(height: Spacing.sm),
+          const SizedBox(height: 10),
 
-          Wrap(
-            spacing: Spacing.xs,
-            runSpacing: Spacing.xs,
-            children: AppStrings.chatSuggestions.map((s) {
-              return GestureDetector(
-                onTap: () => onSuggestionTap(s),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: Spacing.md, vertical: Spacing.sm),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.08),
-                    borderRadius: AppRadius.pillAll,
-                    border: Border.all(
-                        color: AppColors.primary.withOpacity(0.25)),
-                  ),
-                  child: Text(
-                    s,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+          // Suggestion grid
+          ..._suggestions.asMap().entries.map((e) {
+            final i = e.key;
+            final (text, icon) = e.value;
+            return GestureDetector(
+              onTap: () => onSuggestionTap(text),
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE8EDF2)),
+                  boxShadow: const [
+                    BoxShadow(
+                        color: Color(0x06000000),
+                        blurRadius: 6,
+                        offset: Offset(0, 2)),
+                  ],
                 ),
-              );
-            }).toList(),
-          ).animate().fadeIn(delay: 500.ms),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(icon,
+                          size: 16, color: AppColors.primary),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        text,
+                        style: const TextStyle(
+                          fontFamily: 'Nunito',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                    const Icon(LucideIcons.arrowRight,
+                        size: 14, color: AppColors.textMuted),
+                  ],
+                ),
+              ),
+            ).animate().fadeIn(delay: Duration(milliseconds: 420 + i * 50));
+          }),
         ],
       ),
     );
@@ -998,10 +1140,10 @@ class _QuickReplyChips extends StatelessWidget {
   Widget build(BuildContext context) {
     if (replies.isEmpty) return const SizedBox.shrink();
     return Container(
-      height: 44,
-      decoration: BoxDecoration(
-        color: context.tokenSurface,
-        border: Border(top: BorderSide(color: context.tokenBorder)),
+      height: 50,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFF0F0F0))),
       ),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
@@ -1015,11 +1157,18 @@ class _QuickReplyChips extends StatelessWidget {
               onTap(replies[i]);
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 7),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: AppColors.primary.withOpacity(0.25)),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFE8EDF2)),
+                boxShadow: const [
+                  BoxShadow(
+                      color: Color(0x06000000),
+                      blurRadius: 4,
+                      offset: Offset(0, 1)),
+                ],
               ),
               child: Text(
                 replies[i],
@@ -1027,7 +1176,7 @@ class _QuickReplyChips extends StatelessWidget {
                   fontFamily: 'Nunito',
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.primary,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ),
@@ -1058,89 +1207,102 @@ class _ChatInput extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: context.tokenSurface,
+      decoration: const BoxDecoration(
+        color: Colors.white,
         border: Border(
-          top: BorderSide(color: context.tokenBorder),
+          top: BorderSide(color: Color(0xFFF0F0F0)),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 16,
-            offset: const Offset(0, -4),
-          ),
-        ],
       ),
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-              Spacing.md, Spacing.sm, Spacing.md, Spacing.sm),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              // Text field
               Expanded(
-                child: TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  maxLines: 4,
-                  minLines: 1,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => onSend(),
-                  decoration: InputDecoration(
-                    hintText: justListenMode
-                        ? 'Share freely — Maya will just listen...'
-                        : AppStrings.chatPlaceholder,
-                    hintStyle: TextStyle(
-                      color: context.tokenTextMuted,
-                      fontSize: 15,
-                    ),
-                    filled: true,
-                    fillColor: context.tokenBackground,
-                    border: OutlineInputBorder(
-                      borderRadius: AppRadius.pillAll,
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: Spacing.md, vertical: Spacing.sm),
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 140),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F7F8),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: const Color(0xFFE8EDF2)),
                   ),
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: context.tokenTextPrimary,
+                  child: TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    maxLines: null,
+                    minLines: 1,
+                    textInputAction: TextInputAction.newline,
+                    onSubmitted: (_) => onSend(),
+                    style: const TextStyle(
+                      fontFamily: 'Nunito',
+                      fontSize: 15,
+                      color: AppColors.textPrimary,
+                      height: 1.45,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: justListenMode
+                          ? 'Share freely — I\'ll just listen...'
+                          : 'Message Maya...',
+                      hintStyle: const TextStyle(
+                        fontFamily: 'Nunito',
+                        color: AppColors.textMuted,
+                        fontSize: 15,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 11),
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(width: Spacing.sm),
+
+              const SizedBox(width: 8),
+
+              // Send button
               AnimatedContainer(
-                duration: 200.ms,
-                width: 48,
-                height: 48,
+                duration: const Duration(milliseconds: 200),
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  gradient: isLoading
-                      ? null
-                      : const LinearGradient(
-                          colors: [AppColors.primary, AppColors.primaryLight],
-                        ),
-                  color: isLoading ? context.tokenBorder : null,
+                  color: isLoading
+                      ? const Color(0xFFE8EDF2)
+                      : AppColors.primary,
                   shape: BoxShape.circle,
                   boxShadow: isLoading
                       ? null
-                      : AppShadow.coloredMd(AppColors.primary),
+                      : [
+                          BoxShadow(
+                            color: AppColors.primary.withOpacity(0.35),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
                 ),
-                child: IconButton(
-                  icon: isLoading
-                      ? SizedBox(
+                child: isLoading
+                    ? const Center(
+                        child: SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation(
-                                context.tokenTextMuted),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                                AppColors.textMuted),
                           ),
-                        )
-                      : const Icon(LucideIcons.send,
-                          color: Colors.white, size: 20),
-                  onPressed: isLoading ? null : onSend,
-                ),
+                        ),
+                      )
+                    : IconButton(
+                        onPressed: onSend,
+                        icon: const Icon(
+                          LucideIcons.arrowUp,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
               ),
             ],
           ),
@@ -1475,6 +1637,130 @@ class _NavDest {
   });
 }
 
+// ─── Markdown Renderer ────────────────────────────────────
+// Renders Maya's rich text: bold, bullet/numbered lists, tables, headers, code
+
+class _MarkdownRenderer extends StatelessWidget {
+  final String content;
+  final bool isUser;
+  const _MarkdownRenderer({required this.content, required this.isUser});
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isUser ? Colors.white : AppColors.textPrimary;
+    final mutedColor = isUser ? Colors.white70 : AppColors.textMuted;
+    final accentColor = isUser ? Colors.white.withOpacity(0.85) : AppColors.primary;
+
+    final ss = MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+      p: TextStyle(
+          fontFamily: 'Nunito', fontSize: 15, color: textColor, height: 1.6),
+      pPadding: EdgeInsets.zero,
+      strong: TextStyle(
+          fontFamily: 'Nunito',
+          fontSize: 15,
+          color: textColor,
+          fontWeight: FontWeight.w800),
+      em: TextStyle(
+          fontFamily: 'Nunito',
+          fontSize: 15,
+          color: textColor,
+          fontStyle: FontStyle.italic),
+      del: TextStyle(
+          fontFamily: 'Nunito',
+          fontSize: 15,
+          color: mutedColor,
+          decoration: TextDecoration.lineThrough),
+      blockSpacing: 8,
+      listIndent: 20,
+      listBullet: TextStyle(color: accentColor, fontSize: 14),
+      listBulletPadding: const EdgeInsets.only(right: 6),
+      h1: TextStyle(
+          fontFamily: 'Nunito',
+          fontSize: 19,
+          fontWeight: FontWeight.w900,
+          color: textColor,
+          height: 1.3),
+      h2: TextStyle(
+          fontFamily: 'Nunito',
+          fontSize: 17,
+          fontWeight: FontWeight.w800,
+          color: textColor,
+          height: 1.3),
+      h3: TextStyle(
+          fontFamily: 'Nunito',
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+          color: textColor,
+          height: 1.3),
+      h1Padding: const EdgeInsets.only(top: 8, bottom: 4),
+      h2Padding: const EdgeInsets.only(top: 6, bottom: 3),
+      h3Padding: const EdgeInsets.only(top: 4, bottom: 2),
+      code: TextStyle(
+        fontSize: 13,
+        color: isUser ? Colors.white : AppColors.primaryDark,
+        fontFamily: 'monospace',
+        backgroundColor: isUser
+            ? Colors.white.withOpacity(0.2)
+            : const Color(0xFFE0F7F6),
+      ),
+      codeblockPadding: const EdgeInsets.all(12),
+      codeblockDecoration: BoxDecoration(
+        color:
+            isUser ? Colors.white.withOpacity(0.12) : const Color(0xFFE8F9F9),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isUser
+              ? Colors.white.withOpacity(0.2)
+              : AppColors.primary.withOpacity(0.2),
+        ),
+      ),
+      blockquote: TextStyle(
+          fontFamily: 'Nunito',
+          fontSize: 14,
+          color: mutedColor,
+          fontStyle: FontStyle.italic),
+      blockquotePadding:
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      blockquoteDecoration: BoxDecoration(
+        color: isUser
+            ? Colors.white.withOpacity(0.1)
+            : AppColors.primary.withOpacity(0.06),
+        border: Border(
+          left: BorderSide(
+              color: isUser ? Colors.white54 : AppColors.primary, width: 3),
+        ),
+      ),
+      horizontalRuleDecoration: BoxDecoration(
+        border: Border(
+            top: BorderSide(
+                color: isUser ? Colors.white30 : AppColors.border)),
+      ),
+      tableHead: TextStyle(
+          fontFamily: 'Nunito',
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          color: isUser ? Colors.white : AppColors.primaryDark),
+      tableBody: TextStyle(
+          fontFamily: 'Nunito', fontSize: 13, color: textColor),
+      tableBorder: isUser
+          ? TableBorder.all(
+              color: Colors.white.withOpacity(0.25), width: 0.7)
+          : TableBorder.all(color: AppColors.border, width: 0.7),
+      tableCellsPadding:
+          const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      tableHeadAlign: TextAlign.left,
+      tableColumnWidth: const FlexColumnWidth(),
+    );
+
+    return MarkdownBody(
+      data: content,
+      styleSheet: ss,
+      shrinkWrap: true,
+      softLineBreak: true,
+    );
+  }
+}
+
 class _NavGridItem extends StatelessWidget {
   final _NavDest dest;
   final VoidCallback onTap;
@@ -1524,3 +1810,4 @@ class _NavGridItem extends StatelessWidget {
     );
   }
 }
+

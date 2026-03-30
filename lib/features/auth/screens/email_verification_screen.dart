@@ -29,6 +29,7 @@ class _EmailVerificationScreenState
   int _secondsLeft = _cooldownSeconds; // start with cooldown after sign-up
   bool _isVerifying = false;
   bool _isResending = false;
+  bool _verified = false; // brief success state before navigation
   String? _errorMsg;
   bool _codeComplete = false;
 
@@ -135,12 +136,15 @@ class _EmailVerificationScreenState
       _errorMsg = null;
     });
 
-    final ok = await ref.read(authProvider.notifier).verifyOtp(code);
+    final ok = await ref.read(authProvider.notifier).verifyRegistrationOtp(code);
 
     if (!mounted) return;
 
     if (ok) {
-      context.go(AppRoutes.home);
+      // Brief "verified" success flash before navigating
+      setState(() { _verified = true; _isVerifying = false; });
+      await Future.delayed(const Duration(milliseconds: 1600));
+      if (mounted) context.go(AppRoutes.home);
     } else {
       final authState = ref.read(authProvider);
       setState(() {
@@ -191,6 +195,66 @@ class _EmailVerificationScreenState
     final authState = ref.watch(authProvider);
     final email = authState.pendingEmail ?? '';
     final scheme = Theme.of(context).colorScheme;
+
+    // ─── Full-screen verified overlay ────────────────────
+    if (_verified) {
+      return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.light,
+        child: Scaffold(
+          body: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF006B64), Color(0xFF009E95), Color(0xFF004E49)],
+              ),
+            ),
+            child: SafeArea(
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 96, height: 96,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.15),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.5), width: 2),
+                      ),
+                      child: const Icon(Icons.check_rounded,
+                          color: Colors.white, size: 50),
+                    )
+                        .animate()
+                        .scale(
+                            duration: 550.ms,
+                            curve: Curves.elasticOut,
+                            begin: const Offset(0.3, 0.3))
+                        .fadeIn(),
+                    const SizedBox(height: 28),
+                    const Text('Email verified!',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800))
+                        .animate()
+                        .fadeIn(delay: 250.ms)
+                        .slideY(begin: 0.2),
+                    const SizedBox(height: 10),
+                    Text('Setting up your account…',
+                        style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 15))
+                        .animate()
+                        .fadeIn(delay: 400.ms),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,

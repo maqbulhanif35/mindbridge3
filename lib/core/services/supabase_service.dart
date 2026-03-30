@@ -40,8 +40,7 @@ class SupabaseService {
   static Future<void> sendPasswordReset(String email) =>
       _auth.resetPasswordForEmail(email);
 
-  /// Sends a 6-digit OTP via the Magic Link flow (more reliable than signup OTP).
-  /// Call this immediately after signUp() and again on resend.
+  /// Sends a 6-digit OTP via Magic Link — most reliable delivery method.
   static Future<void> sendVerificationOtp(String email) =>
       _auth.signInWithOtp(email: email, shouldCreateUser: false);
 
@@ -55,18 +54,25 @@ class SupabaseService {
       _auth.verifyOTP(
         email: email,
         token: token,
-        type: sb.OtpType.email, // matches signInWithOtp delivery
+        type: sb.OtpType.email, // matches Magic Link / signInWithOtp delivery
       );
+
+  static Future<void> updatePassword(String newPassword) =>
+      _auth.updateUser(sb.UserAttributes(password: newPassword));
 
   static Future<void> refreshSession() => _auth.refreshSession();
 
   static Future<void> signInWithGoogle() {
-    // Use current origin so it works on both localhost and Vercel
-    final redirectTo = kIsWeb ? Uri.base.origin : null;
+    // On web: redirect back to the app origin so supabase_flutter can
+    // pick up the session from the URL hash automatically on reload.
+    // IMPORTANT — add this origin to Supabase → Auth → URL Configuration → Redirect URLs.
+    final redirectTo = kIsWeb ? '${Uri.base.origin}/' : 'com.mindbridge.app://login-callback';
     return _auth.signInWithOAuth(
       sb.OAuthProvider.google,
       redirectTo: redirectTo,
-      authScreenLaunchMode: sb.LaunchMode.platformDefault,
+      authScreenLaunchMode: kIsWeb
+          ? sb.LaunchMode.platformDefault   // same-tab redirect on web
+          : sb.LaunchMode.externalApplication,
     );
   }
 

@@ -4,10 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 import '../models/message_model.dart';
+import '../services/goal_technique_engine.dart';
 import '../services/supabase_service.dart';
 import 'auth_provider.dart';
 import 'crisis_escalation_provider.dart';
 import 'mood_provider.dart';
+import 'streak_provider.dart';
+import '../models/streak_model.dart';
 
 // ─── Chat State ────────────────────────────────────────────────────────────────
 
@@ -285,7 +288,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
     // ── Real-time data block ──────────────────────────────
     final parts = <String>[];
-    if (name.isNotEmpty) parts.add('Name: $name');
 
     // Today's check-in
     final today = moodState.todayEntry;
@@ -385,8 +387,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
           'and connect it to the current data. Ask a thoughtful follow-up. Do NOT say "session".';
     } else if (today == null) {
       instruction =
-          'Generate a warm (2-3 sentence) opening that gently invites the user to share how they\'re feeling today. '
-          '${name.isNotEmpty ? 'Use their name ($name) once.' : ''} Be genuine and curious, not robotic.';
+          'Generate a warm, brief (2-3 sentence) opening that gently invites the user to share how they\'re feeling today. '
+          'Be genuine and curious, not robotic.';
     } else {
       instruction =
           'Generate a warm, brief (2-3 sentence) opening that references something specific from the real-time data above. '
@@ -550,6 +552,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
         content: content,
       ).catchError((_) {});
     }
+
+    // Record chat streak activity after first real user→AI exchange
+    _ref.read(streakProvider.notifier).recordActivity(StreakType.chatSession);
   }
 
   // ─── System prompt ────────────────────────────────────────────────────────
@@ -612,6 +617,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
         ? '\n\n[User profile & current data — reference naturally, never quote directly]\n${ctx.map((p) => '· $p').join('\n')}'
         : '';
 
+    // ── Clinical protocol per goal ────────────────────────
+    final clinicalBlock = GoalTechniqueEngine.buildClinicalProtocolBlock(user);
+
     // ── Memory block (previous sessions) ──────────────────
     final summaries = state.recentSummaries;
     final memoryBlock = summaries.isNotEmpty
@@ -647,7 +655,7 @@ Your communication style — WARM & SUPPORTIVE:
 - Use "I hear you", "that makes sense", "you're not alone"''',
     };
 
-    return '''You are Maya, an AI mental wellness companion for university students in Kenya. It is $timeOfDay on $dow.$contextBlock$memoryBlock
+    return '''You are Maya, an AI mental wellness companion for university students in Kenya. It is $timeOfDay on $dow.$contextBlock$memoryBlock$clinicalBlock
 
 $toneBlock
 
@@ -669,6 +677,17 @@ RESPONSE RULES — follow these strictly every single reply:
 8. Do NOT explain what you are about to do — just do it
 9. Vary how you start every reply — opener words must differ each time (not always "I")
 10. Never repeat advice you already gave in this conversation unless asked again
+11. Do NOT address the user by name in replies — you know their name from the profile but use it at most once during the very opening message only, never in regular conversation replies. Overusing names feels robotic and salesy.
+
+Markdown formatting — the app renders your replies with full markdown support:
+- Use **bold** for technique names, key terms, or important points
+- Use bullet lists (- item) when giving multiple tips, options, or steps
+- Use numbered lists (1. item) for sequential instructions or ranked suggestions
+- Use tables when asked for comparisons, top-N lists, or structured data — format: | Column | Column |\n|---|---|\n| cell | cell | — always include a header row and the separator line
+- Use > blockquotes to highlight an affirmation, quote, or reframe
+- Keep conversational, emotional, or short replies as plain prose — never over-structure empathetic responses
+- Use ### headers ONLY for very long detailed plans the user explicitly requested
+- When asked for "top 10", "best ways to", "compare", or any ranked/structured list — ALWAYS use a formatted table or numbered list, NEVER write paragraphs
 
 Core approach:
 - Use CBT, DBT, and mindfulness techniques naturally — never clinical or robotic

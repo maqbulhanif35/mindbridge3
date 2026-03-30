@@ -1,21 +1,28 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/providers/banner_provider.dart';
+import '../../core/providers/community_provider.dart';
+import '../../core/providers/mood_provider.dart';
+import '../../core/providers/streak_provider.dart';
 import '../../core/router/app_router.dart';
 import 'achievement_overlay.dart';
+import 'in_app_banner.dart';
 
 // ─── More Sheet ───────────────────────────────────────────
 
-void showMoreSheet(BuildContext context) {
+void showMoreSheet(BuildContext context, {int communityBadge = 0}) {
   HapticFeedback.lightImpact();
   showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
     builder: (_) => _MoreSheet(
+      communityBadge: communityBadge,
       onNavigate: (route) {
         Navigator.pop(context);
         context.go(route);
@@ -41,7 +48,8 @@ class _MoreSheetDest {
 
 class _MoreSheet extends StatelessWidget {
   final ValueChanged<String> onNavigate;
-  const _MoreSheet({required this.onNavigate});
+  final int communityBadge;
+  const _MoreSheet({required this.onNavigate, this.communityBadge = 0});
 
   static const _items = [
     _MoreSheetDest(icon: LucideIcons.wind, label: 'Mindfulness', sub: 'Breathing & grounding', route: AppRoutes.mindfulness, color: Color(0xFF10B981)),
@@ -77,7 +85,11 @@ class _MoreSheet extends StatelessWidget {
               ),
             ),
           ),
-          ..._items.map((d) => _MoreTile(dest: d, onTap: () => onNavigate(d.route))),
+          ..._items.map((d) => _MoreTile(
+            dest: d,
+            badge: d.route == AppRoutes.community ? communityBadge : 0,
+            onTap: () => onNavigate(d.route),
+          )),
           // Crisis row
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -120,7 +132,8 @@ class _MoreSheet extends StatelessWidget {
 class _MoreTile extends StatelessWidget {
   final _MoreSheetDest dest;
   final VoidCallback onTap;
-  const _MoreTile({required this.dest, required this.onTap});
+  final int badge;
+  const _MoreTile({required this.dest, required this.onTap, this.badge = 0});
 
   @override
   Widget build(BuildContext context) {
@@ -130,18 +143,57 @@ class _MoreTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         child: Row(
           children: [
-            Container(
-              width: 48, height: 48,
-              decoration: BoxDecoration(
-                color: dest.color.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(dest.icon, color: dest.color, size: 24),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 48, height: 48,
+                  decoration: BoxDecoration(
+                    color: dest.color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(dest.icon, color: dest.color, size: 24),
+                ),
+                if (badge > 0)
+                  Positioned(
+                    top: -4, right: -4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
+                      child: Text(
+                        badge > 99 ? '99+' : '$badge',
+                        style: const TextStyle(fontFamily: 'Nunito', fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(dest.label, style: const TextStyle(fontFamily: 'Nunito', fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                Row(
+                  children: [
+                    Text(dest.label, style: const TextStyle(fontFamily: 'Nunito', fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                    if (badge > 0) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '$badge new',
+                          style: const TextStyle(fontFamily: 'Nunito', fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFFEF4444)),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
                 Text(dest.sub, style: const TextStyle(fontFamily: 'Nunito', fontSize: 12, color: AppColors.textSecondary)),
               ]),
             ),
@@ -159,9 +211,19 @@ class _MoreTile extends StatelessWidget {
 // Do NOT add a routerDelegate listener here — it causes double-rebuilds that
 // interrupt page transition animations.
 
-class MainShell extends StatelessWidget {
+class MainShell extends ConsumerStatefulWidget {
   final Widget child;
   const MainShell({super.key, required this.child});
+
+  @override
+  ConsumerState<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends ConsumerState<MainShell> {
+  // Track what we've already triggered this session
+  bool _moodReminderShown = false;
+  bool _streakAlertShown = false;
+  int _prevUnseenCount = 0;
 
   int _selectedIndex(BuildContext context) {
     final loc = GoRouterState.of(context).matchedLocation;
@@ -178,22 +240,55 @@ class MainShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final idx = _selectedIndex(context);
+    final unseenCount = ref.watch(communityUnseenCountProvider);
+    final moodState = ref.watch(moodProvider);
+    final streakState = ref.watch(streakProvider);
+    final notifier = ref.read(bannerProvider.notifier);
+
+    // ── Mood reminder: after 3 pm, no mood logged today ──
+    final hour = DateTime.now().hour;
+    if (!_moodReminderShown && hour >= 15 && moodState.todayEntry == null) {
+      _moodReminderShown = true;
+      Future.microtask(() => notifier.show(AppBanner.moodReminder()));
+    }
+
+    // ── Streak at risk: after 9 pm, streak > 0 but not logged today ──
+    if (!_streakAlertShown && hour >= 21) {
+      final streak = streakState.overall?.currentStreak ?? 0;
+      if (streak > 0 && moodState.todayEntry == null) {
+        _streakAlertShown = true;
+        Future.microtask(() => notifier.show(AppBanner.streakAtRisk(streak)));
+      }
+    }
+
+    // ── New community posts ──
+    if (unseenCount > 0 && unseenCount > _prevUnseenCount) {
+      final diff = unseenCount - _prevUnseenCount;
+      _prevUnseenCount = unseenCount;
+      if (diff > 0) {
+        Future.microtask(() => notifier.show(AppBanner.newPosts(diff)));
+      }
+    }
+
     return AchievementOverlay(
-      child: Scaffold(
-        extendBody: false,
-        body: child,
-        bottomNavigationBar: _LiquidNavBar(
-          selectedIndex: idx,
-          onTap: (i) {
-            HapticFeedback.lightImpact();
-            switch (i) {
-              case 0: context.go(AppRoutes.home);
-              case 1: context.go(AppRoutes.chat);
-              case 2: context.go(AppRoutes.moodTracker);
-              case 3: context.go(AppRoutes.journal);
-              case 4: showMoreSheet(context);
-            }
-          },
+      child: InAppBannerOverlay(
+        child: Scaffold(
+          extendBody: false,
+          body: widget.child,
+          bottomNavigationBar: _LiquidNavBar(
+            selectedIndex: idx,
+            moreBadgeCount: unseenCount,
+            onTap: (i) {
+              HapticFeedback.lightImpact();
+              switch (i) {
+                case 0: context.go(AppRoutes.home);
+                case 1: context.go(AppRoutes.chat);
+                case 2: context.go(AppRoutes.moodTracker);
+                case 3: context.go(AppRoutes.journal);
+                case 4: showMoreSheet(context, communityBadge: unseenCount);
+              }
+            },
+          ),
         ),
       ),
     );
@@ -213,8 +308,13 @@ class _NavItem {
 class _LiquidNavBar extends StatefulWidget {
   final int selectedIndex;
   final ValueChanged<int> onTap;
+  final int moreBadgeCount;
 
-  const _LiquidNavBar({required this.selectedIndex, required this.onTap});
+  const _LiquidNavBar({
+    required this.selectedIndex,
+    required this.onTap,
+    this.moreBadgeCount = 0,
+  });
 
   static const _kItems = [
     _NavItem(icon: LucideIcons.house, label: 'Home'),
@@ -356,13 +456,34 @@ class _LiquidNavBarState extends State<_LiquidNavBar>
                                           child: isSelected
                                               ? const SizedBox()
                                               : Center(
-                                                  child: _BounceIcon(
-                                                    icon: item.icon,
-                                                    color: isDark
-                                                        ? AppColors
-                                                            .textMutedDark
-                                                        : AppColors.textMuted,
-                                                    onTap: () => widget.onTap(i),
+                                                  child: Stack(
+                                                    clipBehavior: Clip.none,
+                                                    children: [
+                                                      _BounceIcon(
+                                                        icon: item.icon,
+                                                        color: isDark
+                                                            ? AppColors.textMutedDark
+                                                            : AppColors.textMuted,
+                                                        onTap: () => widget.onTap(i),
+                                                      ),
+                                                      if (i == 4 && widget.moreBadgeCount > 0)
+                                                        Positioned(
+                                                          top: -5,
+                                                          right: -7,
+                                                          child: Container(
+                                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                                            decoration: BoxDecoration(
+                                                              color: const Color(0xFFEF4444),
+                                                              borderRadius: BorderRadius.circular(8),
+                                                              border: Border.all(color: Colors.white, width: 1.5),
+                                                            ),
+                                                            child: Text(
+                                                              widget.moreBadgeCount > 99 ? '99+' : '${widget.moreBadgeCount}',
+                                                              style: const TextStyle(fontFamily: 'Nunito', fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                    ],
                                                   ),
                                                 ),
                                         ),

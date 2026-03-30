@@ -7,6 +7,7 @@ import '../../features/auth/screens/onboarding_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/register_screen.dart';
 import '../../features/auth/screens/email_verification_screen.dart';
+import '../../features/auth/screens/forgot_password_screen.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/chat/screens/chat_screen.dart';
 import '../../features/mood/screens/mood_tracker_screen.dart';
@@ -18,6 +19,7 @@ import '../../features/mindfulness/screens/breathing_screen.dart';
 import '../../features/resources/screens/resources_screen.dart';
 import '../../features/community/screens/community_screen.dart';
 import '../../features/wellness/screens/wellness_screen.dart';
+import '../../features/wellness/screens/wellness_plan_screen.dart';
 import '../../features/crisis/screens/crisis_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../shared/widgets/main_shell.dart';
@@ -39,9 +41,11 @@ abstract class AppRoutes {
   static const String resources = '/resources';
   static const String community = '/community';
   static const String wellness = '/wellness';
+  static const String wellnessPlan = '/wellness/plan';
   static const String crisis = '/crisis';
   static const String profile = '/profile';
   static const String verifyEmail = '/verify-email';
+  static const String forgotPassword = '/forgot-password';
 }
 
 // ─── Auth Listenable ──────────────────────────────────────
@@ -82,8 +86,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isPendingVerification = authState.isPendingVerification;
       final location = state.matchedLocation;
 
+      final isPendingReset = status == AuthStatus.pendingReset;
+      final isResetVerified = status == AuthStatus.resetVerified;
+      final isInResetFlow = isPendingReset || isResetVerified;
+
       final isOnSplash = location == AppRoutes.splash;
       final isOnVerify = location == AppRoutes.verifyEmail;
+      final isOnForgot = location == AppRoutes.forgotPassword;
       final isOnOnboarding = location == AppRoutes.onboarding;
       final isOnAuthPage = location == AppRoutes.login ||
           location == AppRoutes.register;
@@ -94,16 +103,24 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Still loading — stay on splash
       if (isLoading) return AppRoutes.splash;
 
+      // Password reset flow — keep them on the forgot-password screen
+      if (isInResetFlow && !isOnForgot) return AppRoutes.forgotPassword;
+      if (isInResetFlow && isOnForgot) return null;
+
       // Pending email verification — force to verify screen
       if (isPendingVerification && !isOnVerify) return AppRoutes.verifyEmail;
 
       // Verified user on verify screen — move along
       if (isAuthenticated && isOnVerify) return AppRoutes.home;
 
-      // Not authenticated — redirect to login
-      if (!isAuthenticated && !isPendingVerification && !isOnAuthPage) {
+      // Not authenticated — allow forgot-password and auth pages through
+      if (!isAuthenticated && !isPendingVerification && !isInResetFlow &&
+          !isOnAuthPage && !isOnForgot) {
         return AppRoutes.login;
       }
+
+      // Authenticated but somehow on forgot-password → go home
+      if (isAuthenticated && isOnForgot) return AppRoutes.home;
 
       // Authenticated but on a login/register page — go home
       if (isAuthenticated && isOnAuthPage) return AppRoutes.home;
@@ -147,6 +164,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.verifyEmail,
         builder: (_, __) => const EmailVerificationScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.forgotPassword,
+        builder: (_, __) => const ForgotPasswordScreen(),
       ),
 
       // ─── Main Shell (Bottom Nav) ─────────────────────
@@ -210,6 +231,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           final extra = state.extra as Map<String, dynamic>?;
           return BreathingScreen(exerciseId: extra?['exerciseId'] as String?);
         },
+      ),
+      GoRoute(
+        path: AppRoutes.wellnessPlan,
+        builder: (_, __) => const WellnessPlanScreen(),
       ),
       GoRoute(
         path: AppRoutes.crisis,

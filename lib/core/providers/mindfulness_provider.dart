@@ -1,8 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
+import '../models/streak_model.dart';
+import '../services/supabase_service.dart';
+import 'auth_provider.dart';
+import 'streak_provider.dart';
 
 // ─── State ──────────────────────────────────────────────────
 
 class MindfulnessSession {
+  final String id;
   final String exerciseId;
   final String exerciseName;
   final int cyclesCompleted;
@@ -10,23 +16,46 @@ class MindfulnessSession {
   final DateTime completedAt;
 
   const MindfulnessSession({
+    required this.id,
     required this.exerciseId,
     required this.exerciseName,
     required this.cyclesCompleted,
     required this.durationSeconds,
     required this.completedAt,
   });
+
+  factory MindfulnessSession.fromMap(Map<String, dynamic> m) =>
+      MindfulnessSession(
+        id: m['id'] as String,
+        exerciseId: m['exercise_id'] as String? ?? '',
+        exerciseName: m['exercise_name'] as String? ?? '',
+        cyclesCompleted: (m['cycles_completed'] as int?) ?? 0,
+        durationSeconds: (m['duration_seconds'] as int?) ?? 0,
+        completedAt: DateTime.parse(m['completed_at'] as String),
+      );
+
+  Map<String, dynamic> toMap(String userId) => {
+        'id': id,
+        'user_id': userId,
+        'exercise_id': exerciseId,
+        'exercise_name': exerciseName,
+        'cycles_completed': cyclesCompleted,
+        'duration_seconds': durationSeconds,
+        'completed_at': completedAt.toIso8601String(),
+      };
 }
 
 class MindfulnessState {
   final List<MindfulnessSession> todaySessions;
   final String? activeSound;
   final bool soundPlaying;
+  final bool isLoaded;
 
   const MindfulnessState({
     this.todaySessions = const [],
     this.activeSound,
     this.soundPlaying = false,
+    this.isLoaded = false,
   });
 
   MindfulnessState copyWith({
@@ -34,23 +63,22 @@ class MindfulnessState {
     String? activeSound,
     bool? soundPlaying,
     bool clearSound = false,
+    bool? isLoaded,
   }) {
     return MindfulnessState(
       todaySessions: todaySessions ?? this.todaySessions,
       activeSound: clearSound ? null : (activeSound ?? this.activeSound),
       soundPlaying: soundPlaying ?? this.soundPlaying,
+      isLoaded: isLoaded ?? this.isLoaded,
     );
   }
 
-  // Total seconds practiced today
   int get totalSecondsToday =>
       todaySessions.fold(0, (sum, s) => sum + s.durationSeconds);
-
   int get totalMinutesToday => (totalSecondsToday / 60).floor();
-
   int get totalSessionsToday => todaySessions.length;
+  bool get hasSessionToday => todaySessions.isNotEmpty;
 
-  // IDs of exercises completed at least once today
   Set<String> get completedExerciseIds =>
       todaySessions.map((s) => s.exerciseId).toSet();
 
@@ -61,31 +89,92 @@ class MindfulnessState {
 // ─── Notifier ───────────────────────────────────────────────
 
 class MindfulnessNotifier extends Notifier<MindfulnessState> {
-  @override
-  MindfulnessState build() => const MindfulnessState();
+  static final _client = Supabase.instance.client;
 
-  void recordSession({
+  @override
+  MindfulnessState build() {
+    // Load immediately; also reload when user signs in
+    _loadToday();
+    ref.listen<AuthState>(authProvider, (prev, next) {
+      if (next.isAuthenticated && !(prev?.isAuthenticated ?? false)) {
+        _loadToday();
+      }
+    });
+    return const MindfulnessState();
+  }
+
+  // ── Load today's sessions from Supabase ──────────────────
+
+  Future<void> _loadToday() async {
+    final userId = SupabaseService.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      final now = DateTime.now();
+      final startOfDay =
+          DateTime(now.year, now.month, now.day).toIso8601String();
+
+      final rows = await _client
+          .from('mindfulness_sessions')
+          .select()
+          .eq('user_id', userId)
+          .gte('completed_at', startOfDay)
+          .order('completed_at');
+
+      final sessions = (rows as List)
+          .map((r) => MindfulnessSession.fromMap(r as Map<String, dynamic>))
+          .toList();
+
+      state = state.copyWith(todaySessions: sessions, isLoaded: true);
+    } catch (_) {
+      // Table may not exist yet — just mark loaded so UI doesn't block
+      state = state.copyWith(isLoaded: true);
+    }
+  }
+
+  // ── Record a completed session ───────────────────────────
+
+  Future<void> recordSession({
     required String exerciseId,
     required String exerciseName,
     required int cyclesCompleted,
     required int durationSeconds,
-  }) {
+  }) async {
     if (cyclesCompleted < 1) return;
+
+    final userId = SupabaseService.currentUser?.id;
+    final now = DateTime.now();
+    final id = '${userId}_${now.millisecondsSinceEpoch}';
+
     final session = MindfulnessSession(
+      id: id,
       exerciseId: exerciseId,
       exerciseName: exerciseName,
       cyclesCompleted: cyclesCompleted,
       durationSeconds: durationSeconds,
-      completedAt: DateTime.now(),
+      completedAt: now,
     );
+
+    // Update in-memory immediately so UI reflects instantly
     state = state.copyWith(
       todaySessions: [...state.todaySessions, session],
     );
+
+    // Persist to Supabase (best-effort — UI already updated)
+    if (userId != null) {
+      try {
+        await _client
+            .from('mindfulness_sessions')
+            .upsert(session.toMap(userId));
+      } catch (_) {}
+    }
+
+    // Record mindfulness streak
+    ref.read(streakProvider.notifier).recordActivity(StreakType.mindfulness);
   }
 
   void setActiveSound(String label) {
     if (state.activeSound == label && state.soundPlaying) {
-      // Toggle off
       state = state.copyWith(clearSound: true, soundPlaying: false);
     } else {
       state = state.copyWith(activeSound: label, soundPlaying: true);
@@ -95,6 +184,8 @@ class MindfulnessNotifier extends Notifier<MindfulnessState> {
   void stopSound() {
     state = state.copyWith(clearSound: true, soundPlaying: false);
   }
+
+  Future<void> refresh() => _loadToday();
 }
 
 // ─── Provider ───────────────────────────────────────────────

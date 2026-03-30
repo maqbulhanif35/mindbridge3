@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/mood_model.dart';
+import '../models/user_model.dart';
+import 'goal_plan_engine.dart';
 import 'trend_analyzer.dart';
 
 /// Smart notification service that learns from user patterns
@@ -160,6 +162,44 @@ class NotificationService {
       minute: 0,
       channelId: _channelInsights,
       payload: 'weekly_report',
+    );
+  }
+
+  /// Schedule a personalized daily check-in using the user's preferred
+  /// check-in time (morning/afternoon/evening/any) and goal-aware copy.
+  Future<void> schedulePersonalizedCheckIn(UserModel user) async {
+    if (!_initialized) return;
+    final hour = GoalPlanEngine.checkInHour(user.checkInTime);
+    final minute = GoalPlanEngine.checkInMinute(user.checkInTime);
+    final title = GoalPlanEngine.getCheckInTitle(user);
+    final body = GoalPlanEngine.getCheckInBody(user);
+
+    await _scheduleDaily(
+      id: _idDailyCheckIn,
+      title: title,
+      body: body,
+      hour: hour,
+      minute: minute,
+      channelId: _channelCheckIn,
+      payload: 'mood_checkin',
+    );
+
+    await savePreferredCheckInTime(hour, minute);
+    debugPrint('NotificationService: Personalized check-in at $hour:${minute.toString().padLeft(2, '0')} — "${user.checkInTime}"');
+  }
+
+  /// Schedule a streak protection reminder personalized to the user's goals.
+  Future<void> schedulePersonalizedStreakProtection(UserModel user) async {
+    if (!_initialized) return;
+    final body = GoalPlanEngine.getStreakProtectionBody(user);
+    await _scheduleDaily(
+      id: _idStreakProtection,
+      title: '🔥 Keep your streak alive!',
+      body: body,
+      hour: 22,
+      minute: 0,
+      channelId: _channelStreak,
+      payload: 'streak_protection',
     );
   }
 

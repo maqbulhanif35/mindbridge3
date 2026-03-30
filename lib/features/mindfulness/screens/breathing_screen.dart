@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
@@ -175,7 +176,7 @@ class _BreathingScreenState extends ConsumerState<BreathingScreen>
         timeStr: timeStr,
         onDone: () {
           Navigator.pop(context); // close sheet
-          Navigator.pop(context); // go back to mindfulness
+          if (mounted) context.pop(); // go back to mindfulness
         },
         onRestart: () {
           Navigator.pop(context);
@@ -201,7 +202,7 @@ class _BreathingScreenState extends ConsumerState<BreathingScreen>
           icon: const Icon(LucideIcons.arrowLeft, color: Colors.white),
           onPressed: () async {
             if (_isRunning) await _stopBreathing();
-            if (mounted) Navigator.pop(context);
+            if (mounted) context.pop();
           },
         ),
         title: Text(

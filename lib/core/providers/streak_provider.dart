@@ -1,10 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import 'package:uuid/uuid.dart';
 import '../models/streak_model.dart';
 import '../models/achievement_model.dart';
 import '../services/notification_service.dart';
 import '../services/supabase_service.dart';
+import 'auth_provider.dart';
 
 // ─── State ────────────────────────────────────────────────
 
@@ -49,9 +50,17 @@ class StreakAchievementNotifier
     extends StateNotifier<StreakAchievementState> {
   static const _uuid = Uuid();
   final SupabaseClient _client = Supabase.instance.client;
+  final Ref _ref;
 
-  StreakAchievementNotifier() : super(const StreakAchievementState()) {
+  StreakAchievementNotifier(this._ref) : super(const StreakAchievementState()) {
+    // Load immediately in case user is already authenticated
     _load();
+    // Re-load whenever auth state changes (e.g. after login completes)
+    _ref.listen<AuthState>(authProvider, (prev, next) {
+      if (next.isAuthenticated && !(prev?.isAuthenticated ?? false)) {
+        _load();
+      }
+    });
   }
 
   Future<void> _load() async {
@@ -270,5 +279,5 @@ class StreakAchievementNotifier
 
 final streakProvider =
     StateNotifierProvider<StreakAchievementNotifier, StreakAchievementState>(
-  (ref) => StreakAchievementNotifier(),
+  (ref) => StreakAchievementNotifier(ref),
 );

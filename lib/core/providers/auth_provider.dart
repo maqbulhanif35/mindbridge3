@@ -1,8 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 import '../models/user_model.dart';
-import '../services/supabase_service.dart';
 import '../services/email_service.dart';
+import '../services/notification_service.dart';
+import '../services/supabase_service.dart';
 
 // ─── Auth Status ──────────────────────────────────────────
 
@@ -12,6 +13,8 @@ enum AuthStatus {
   authenticated,
   unauthenticated,
   pendingVerification, // signed up but email not yet confirmed
+  pendingReset,        // forgot password — OTP sent, waiting for code entry
+  resetVerified,       // OTP verified — waiting for new password input
   error,
 }
 
@@ -23,11 +26,18 @@ class AuthState {
   final String? errorMessage;
   final String? pendingEmail; // email awaiting verification
 
+  /// Stores registration form data in-memory while waiting for OTP.
+  /// Cleared on verification success, logout, or cancel.
+  /// NOT persisted across full page-reloads by design — if the user
+  /// refreshes before verifying, they must register again (correct behavior).
+  final Map<String, dynamic>? pendingRegistrationData;
+
   const AuthState({
     this.status = AuthStatus.initial,
     this.user,
     this.errorMessage,
     this.pendingEmail,
+    this.pendingRegistrationData,
   });
 
   AuthState copyWith({
@@ -35,18 +45,25 @@ class AuthState {
     UserModel? user,
     String? errorMessage,
     String? pendingEmail,
+    Map<String, dynamic>? pendingRegistrationData,
     bool clearError = false,
+    bool clearPendingData = false,
   }) =>
       AuthState(
         status: status ?? this.status,
         user: user ?? this.user,
         errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
         pendingEmail: pendingEmail ?? this.pendingEmail,
+        pendingRegistrationData: clearPendingData
+            ? null
+            : (pendingRegistrationData ?? this.pendingRegistrationData),
       );
 
   bool get isAuthenticated => status == AuthStatus.authenticated;
   bool get isLoading => status == AuthStatus.loading;
   bool get isPendingVerification => status == AuthStatus.pendingVerification;
+  bool get isPendingReset => status == AuthStatus.pendingReset;
+  bool get isResetVerified => status == AuthStatus.resetVerified;
 }
 
 // ─── Auth Notifier ────────────────────────────────────────
@@ -66,12 +83,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (session != null) {
       final user = session.user;
       if (user.emailConfirmedAt != null) {
+        // Only trust a confirmed session — load the user's profile
         _loadProfile(user.id);
       } else {
-        state = AuthState(
-          status: AuthStatus.pendingVerification,
-          pendingEmail: user.email,
-        );
+        // Unconfirmed session (e.g. Supabase email confirm enabled but user
+        // never clicked the Supabase link). Since we now own OTP verification
+        // through our backend, treat this as unauthenticated so the user
+        // goes back through the proper registration + OTP flow.
+        // Sign out the stale session silently.
+        SupabaseService.signOut().ignore();
+        state = const AuthState(status: AuthStatus.unauthenticated);
       }
     } else {
       state = const AuthState(status: AuthStatus.unauthenticated);
@@ -85,6 +106,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final session = data.session;
 
       if (event == sb.AuthChangeEvent.signedIn && session != null) {
+        // Never let a signedIn event override an ongoing OTP verification flow
+        if (state.isPendingVerification) return;
         final user = session.user;
         if (user.emailConfirmedAt != null) {
           _loadProfile(user.id);
@@ -116,6 +139,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
           user: profile,
           clearError: true,
         );
+        // Schedule personalized notifications using their onboarding preferences.
+        NotificationService().schedulePersonalizedCheckIn(profile);
+        NotificationService().schedulePersonalizedStreakProtection(profile);
       } else {
         // New user (Google OAuth) — create a default profile from auth metadata.
         // For email/password new users this path is only reached after OTP
@@ -194,6 +220,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   // ─── Sign Up ──────────────────────────────────────────
+  //
+  // ARCHITECTURE: We do NOT create a Supabase account here.
+  // We only send our backend OTP and hold the form data in memory.
+  // This prevents the refresh-bypass bug where an unverified Supabase
+  // session would let users skip the OTP gate entirely.
+  // The Supabase account is created inside verifyRegistrationOtp() AFTER
+  // the user proves ownership of their email address.
 
   Future<bool> register({
     required String name,
@@ -211,65 +244,155 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final normalizedEmail = email.trim().toLowerCase();
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
 
-    // Block the auth stream for the duration of sign-up so the automatic
-    // signedIn event that Supabase fires cannot race us to authenticated state
-    // before we have had a chance to set pendingVerification.
-    _suppressAuthStream = true;
     try {
-      final response = await SupabaseService.signUp(
-        email: normalizedEmail,
-        password: password,
+      // Send OTP from our backend — no Supabase call yet
+      final otpSent = await EmailService.sendOtp(
+        toEmail: normalizedEmail,
         name: name.trim(),
+        type: 'verify',
       );
-      final user = response.user;
-      if (user == null) {
+
+      if (!otpSent) {
         state = state.copyWith(
           status: AuthStatus.error,
-          errorMessage: 'Sign up failed. Please try again.',
+          errorMessage:
+              'Could not send verification code. Check your email address and try again.',
         );
         return false;
       }
 
-      // Write profile row now (silently ignored if RLS blocks it).
-      try {
-        await SupabaseService.upsertProfile(UserModel(
-          id: user.id,
-          email: normalizedEmail,
-          name: name.trim(),
-          university: university,
-          yearOfStudy: yearOfStudy,
-          faculty: faculty,
-          goals: goals ?? [],
-          stressors: stressors ?? [],
-          mayaPersonality: mayaPersonality,
-          checkInTime: checkInTime,
-          therapyExperience: therapyExperience,
-          createdAt: DateTime.now(),
-        ));
-      } catch (_) {}
-
-      // Send OTP via signInWithOtp — more reliable than the signup
-      // confirmation email and works regardless of email-confirmation setting.
-      try {
-        await SupabaseService.sendVerificationOtp(normalizedEmail);
-      } catch (_) {}
-
-      // Always require OTP before granting access
-      state = state.copyWith(
+      // Hold form data in-memory until OTP is confirmed
+      state = AuthState(
         status: AuthStatus.pendingVerification,
         pendingEmail: normalizedEmail,
+        pendingRegistrationData: {
+          'name': name.trim(),
+          'password': password,
+          'university': university,
+          'yearOfStudy': yearOfStudy,
+          'faculty': faculty,
+          'goals': goals ?? <String>[],
+          'stressors': stressors ?? <String>[],
+          'mayaPersonality': mayaPersonality,
+          'checkInTime': checkInTime,
+          'therapyExperience': therapyExperience,
+        },
       );
+      return true;
+    } catch (_) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: 'Registration failed. Please try again.',
+      );
+      return false;
+    }
+  }
+
+  // ─── Registration OTP Verification ───────────────────
+  //
+  // Called after the user enters the 6-digit code from their email.
+  // Only on a valid code do we create the Supabase account + profile.
+
+  Future<bool> verifyRegistrationOtp(String code) async {
+    final email = state.pendingEmail;
+    final regData = state.pendingRegistrationData;
+    if (email == null || regData == null) return false;
+
+    state = state.copyWith(status: AuthStatus.loading, clearError: true);
+    _suppressAuthStream = true;
+
+    try {
+      // Step 1 — Verify code against our backend OTP store
+      final otpValid =
+          await EmailService.verifyOtp(email: email, code: code.trim());
+      if (!otpValid) {
+        state = state.copyWith(
+          status: AuthStatus.pendingVerification,
+          errorMessage: 'Invalid or expired code. Try resending.',
+        );
+        return false;
+      }
+
+      // Step 2 — Create Supabase account (email is proven by this point)
+      final name = regData['name'] as String;
+      final password = regData['password'] as String;
+
+      sb.AuthResponse? response;
+      try {
+        response = await SupabaseService.signUp(
+          email: email,
+          password: password,
+          name: name,
+        ).timeout(const Duration(seconds: 15));
+      } on sb.AuthException catch (e) {
+        // Account may already exist from a previous partial attempt
+        if (e.message.toLowerCase().contains('already registered') ||
+            e.code == 'user_already_exists') {
+          response = null; // fall through to signIn below
+        } else {
+          rethrow;
+        }
+      }
+
+      // Get a valid session — either from signUp or by signing in
+      String? userId = response?.user?.id;
+      if (response?.session == null || userId == null) {
+        final signIn = await SupabaseService.signIn(
+          email: email,
+          password: password,
+        );
+        if (signIn.user == null) {
+          state = state.copyWith(
+            status: AuthStatus.pendingVerification,
+            errorMessage: 'Account creation failed. Please try again.',
+          );
+          return false;
+        }
+        userId = signIn.user!.id;
+      }
+
+      // Step 3 — Write full profile row
+      try {
+        await SupabaseService.upsertProfile(UserModel(
+          id: userId,
+          email: email,
+          name: name,
+          university: regData['university'] as String?,
+          yearOfStudy: regData['yearOfStudy'] as int?,
+          faculty: regData['faculty'] as String?,
+          goals: List<String>.from(regData['goals'] as List),
+          stressors: List<String>.from(regData['stressors'] as List),
+          mayaPersonality: regData['mayaPersonality'] as String? ?? 'warm',
+          checkInTime: regData['checkInTime'] as String? ?? 'any',
+          therapyExperience:
+              regData['therapyExperience'] as String? ?? 'never',
+          createdAt: DateTime.now(),
+        )).timeout(const Duration(seconds: 8));
+      } catch (_) {}
+
+      // Step 4 — Load profile into state (sets authenticated)
+      await _loadProfile(userId);
+
+      // Step 5 — Fire welcome email (non-blocking)
+      final profile = state.user;
+      if (profile != null) {
+        EmailService.sendWelcomeEmail(
+          toEmail: profile.email,
+          name: profile.displayName,
+        );
+      }
+
       return true;
     } on sb.AuthException catch (e) {
       state = state.copyWith(
-        status: AuthStatus.error,
+        status: AuthStatus.pendingVerification,
         errorMessage: _humanizeAuthError(e),
       );
       return false;
     } catch (_) {
       state = state.copyWith(
-        status: AuthStatus.error,
-        errorMessage: 'Registration failed. Please try again.',
+        status: AuthStatus.pendingVerification,
+        errorMessage: 'Verification failed. Please try again.',
       );
       return false;
     } finally {
@@ -279,21 +402,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   // ─── Email Verification ───────────────────────────────
 
-  /// Resend signup OTP email via Supabase auth.
+  /// Resend the signup OTP via our backend.
   Future<bool> resendVerificationEmail() async {
     final email = state.pendingEmail;
     if (email == null) return false;
+    final name =
+        (state.pendingRegistrationData?['name'] as String?) ?? 'there';
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
     try {
-      await SupabaseService.resendVerificationEmail(email);
-      state = state.copyWith(status: AuthStatus.pendingVerification);
-      return true;
-    } on sb.AuthException catch (e) {
-      state = state.copyWith(
-        status: AuthStatus.pendingVerification,
-        errorMessage: _humanizeAuthError(e),
+      final ok = await EmailService.sendOtp(
+        toEmail: email,
+        name: name,
+        type: 'verify',
       );
-      return false;
+      state = state.copyWith(status: AuthStatus.pendingVerification);
+      return ok;
     } catch (_) {
       state = state.copyWith(
         status: AuthStatus.pendingVerification,
@@ -345,7 +468,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       await SupabaseService.signOut();
     } catch (_) {}
-    state = const AuthState(status: AuthStatus.unauthenticated);
+    state = const AuthState(status: AuthStatus.unauthenticated); // clears all pending data
   }
 
   // ─── Update Profile ───────────────────────────────────
@@ -367,6 +490,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(user: updated);
     try {
       await SupabaseService.upsertProfile(updated);
+      // Re-schedule notifications with the final onboarding preferences
+      // (goals, check-in time, stressors are now set).
+      NotificationService().schedulePersonalizedCheckIn(updated);
+      NotificationService().schedulePersonalizedStreakProtection(updated);
     } catch (_) {}
   }
 
@@ -417,8 +544,109 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  // ─── Forgot Password Flow ─────────────────────────────
+
+  /// Step 1 — Send OTP to [email] for password reset.
+  /// Uses the same signInWithOtp mechanism as email verification,
+  /// which delivers through our configured Gmail SMTP.
+  Future<bool> forgotPassword(String email) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    state = state.copyWith(status: AuthStatus.loading, clearError: true);
+    try {
+      await SupabaseService.sendVerificationOtp(normalizedEmail);
+      state = AuthState(
+        status: AuthStatus.pendingReset,
+        pendingEmail: normalizedEmail,
+      );
+      return true;
+    } on sb.AuthException catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        errorMessage: _humanizeAuthError(e),
+      );
+      return false;
+    } catch (_) {
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        errorMessage: 'Could not send reset code. Check your internet.',
+      );
+      return false;
+    }
+  }
+
+  /// Step 2 — Verify the OTP code entered by the user.
+  /// On success the user gets a session (required for updateUser).
+  Future<bool> verifyResetOtp(String code) async {
+    final email = state.pendingEmail;
+    if (email == null) return false;
+    state = state.copyWith(status: AuthStatus.loading, clearError: true);
+    _suppressAuthStream = true;
+    try {
+      final response = await SupabaseService.verifyOtp(
+        email: email,
+        token: code,
+      );
+      if (response.user == null) {
+        state = state.copyWith(
+          status: AuthStatus.pendingReset,
+          errorMessage: 'Invalid or expired code. Try resending.',
+        );
+        return false;
+      }
+      state = AuthState(
+        status: AuthStatus.resetVerified,
+        pendingEmail: email,
+      );
+      return true;
+    } on sb.AuthException catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.pendingReset,
+        errorMessage: _humanizeAuthError(e),
+      );
+      return false;
+    } catch (_) {
+      state = state.copyWith(
+        status: AuthStatus.pendingReset,
+        errorMessage: 'Verification failed. Please try again.',
+      );
+      return false;
+    } finally {
+      _suppressAuthStream = false;
+    }
+  }
+
+  /// Step 3 — Set a new password. User must have a valid reset session
+  /// from verifyResetOtp(). Signs out afterwards so they log in fresh.
+  Future<bool> resetPassword(String newPassword) async {
+    state = state.copyWith(status: AuthStatus.loading, clearError: true);
+    try {
+      await SupabaseService.updatePassword(newPassword);
+      await SupabaseService.signOut();
+      state = const AuthState(status: AuthStatus.unauthenticated);
+      return true;
+    } on sb.AuthException catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.resetVerified,
+        errorMessage: _humanizeAuthError(e),
+      );
+      return false;
+    } catch (_) {
+      state = state.copyWith(
+        status: AuthStatus.resetVerified,
+        errorMessage: 'Failed to update password. Please try again.',
+      );
+      return false;
+    }
+  }
+
   void clearError() {
     state = state.copyWith(clearError: true);
+  }
+
+  /// Abort the forgot-password flow and return to unauthenticated.
+  /// Call this when the user explicitly leaves the forgot-password screen.
+  void cancelReset() {
+    state = const AuthState(status: AuthStatus.unauthenticated);
   }
 
   // ─── Error Humanizer ──────────────────────────────────
