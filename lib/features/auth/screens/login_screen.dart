@@ -34,6 +34,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passCtrl = TextEditingController();
   bool _obscurePass = true;
   bool _rememberMe = false;
+  bool _googleLoading = false;
 
   @override
   void dispose() {
@@ -267,7 +268,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   iconColor: const Color(0xFF4285F4),
                   iconBg: const Color(0xFFEBF1FF),
                   label: 'Continue with Google',
-                  onTap: () => ref.read(authProvider.notifier).signInWithGoogle(),
+                  isLoading: _googleLoading,
+                  onTap: _googleLoading ? null : _signInWithGoogle,
                 ).animate().fadeIn(delay: 130.ms).slideY(begin: 0.2),
 
                 const SizedBox(height: 9),
@@ -518,9 +520,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _signInWithGoogle() async {
-    await ref.read(authProvider.notifier).signInWithGoogle();
-    // On web: browser navigates away to Google — nothing to do here.
-    // On return, authStateChange fires and router redirects to home.
+    if (_googleLoading) return;
+    setState(() => _googleLoading = true);
+    try {
+      await ref.read(authProvider.notifier).signInWithGoogle();
+      // On web: browser navigates away to Google — button stays in loading
+      // state until the redirect happens. On return, authStateChange fires
+      // and the router redirects to onboarding or home automatically.
+    } catch (_) {
+      if (mounted) setState(() => _googleLoading = false);
+    }
   }
 }
 
@@ -737,7 +746,8 @@ class _SocialButton extends StatelessWidget {
   final Color iconColor;
   final Color iconBg;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool isLoading;
 
   const _SocialButton({
     required this.icon,
@@ -745,6 +755,7 @@ class _SocialButton extends StatelessWidget {
     required this.iconBg,
     required this.label,
     required this.onTap,
+    this.isLoading = false,
   });
 
   @override
@@ -752,7 +763,7 @@ class _SocialButton extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: isLoading ? null : onTap,
         borderRadius: BorderRadius.circular(13),
         child: Container(
           height: 50,
@@ -775,24 +786,34 @@ class _SocialButton extends StatelessWidget {
               Container(
                 width: 30, height: 30,
                 decoration: BoxDecoration(
-                  color: iconBg,
+                  color: isLoading ? iconBg.withValues(alpha: 0.5) : iconBg,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Center(
-                    child: FaIcon(icon, color: iconColor, size: 14)),
-              ),
-              const Spacer(),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  child: isLoading
+                      ? SizedBox(
+                          width: 14, height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(iconColor),
+                          ),
+                        )
+                      : FaIcon(icon, color: iconColor, size: 14),
                 ),
               ),
               const Spacer(),
-              Icon(Icons.arrow_forward_ios_rounded,
-                  size: 12, color: AppColors.textMuted),
+              Text(
+                isLoading ? 'Redirecting to Google…' : label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: isLoading ? AppColors.textMuted : AppColors.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              if (!isLoading)
+                Icon(Icons.arrow_forward_ios_rounded,
+                    size: 12, color: AppColors.textMuted),
             ],
           ),
         ),
