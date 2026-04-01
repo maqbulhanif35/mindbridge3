@@ -15,6 +15,8 @@ class UserModel extends Equatable {
   final String mayaPersonality; // 'warm' | 'direct' | 'playful'
   final String checkInTime; // 'morning' | 'afternoon' | 'evening' | 'any'
   final String therapyExperience; // 'never' | 'apps' | 'therapy'
+  final String role; // 'user' | 'admin' | 'superadmin'
+  final bool isBanned;
   final DateTime createdAt;
 
   const UserModel({
@@ -32,8 +34,13 @@ class UserModel extends Equatable {
     this.mayaPersonality = 'warm',
     this.checkInTime = 'any',
     this.therapyExperience = 'never',
+    this.role = 'user',
+    this.isBanned = false,
     required this.createdAt,
   });
+
+  bool get isAdmin => role == 'admin' || role == 'superadmin';
+  bool get isSuperAdmin => role == 'superadmin';
 
   String get displayName => preferredName ?? name.split(' ').first;
 
@@ -78,6 +85,8 @@ class UserModel extends Equatable {
         mayaPersonality: json['maya_personality'] as String? ?? 'warm',
         checkInTime: json['check_in_time'] as String? ?? 'any',
         therapyExperience: json['therapy_experience'] as String? ?? 'never',
+        role: json['role'] as String? ?? 'user',
+        isBanned: json['is_banned'] as bool? ?? false,
         createdAt: DateTime.parse(json['created_at'] as String),
       );
 
@@ -96,6 +105,8 @@ class UserModel extends Equatable {
         'maya_personality': mayaPersonality,
         'check_in_time': checkInTime,
         'therapy_experience': therapyExperience,
+        'role': role,
+        'is_banned': isBanned,
         'created_at': createdAt.toIso8601String(),
       };
 
@@ -114,6 +125,8 @@ class UserModel extends Equatable {
         'maya_personality': mayaPersonality,
         'check_in_time': checkInTime,
         'therapy_experience': therapyExperience,
+        // NOTE: 'role' and 'is_banned' are intentionally excluded —
+        // they are admin-managed and must never be overwritten by a client upsert.
       };
 
   UserModel copyWith({
@@ -131,6 +144,8 @@ class UserModel extends Equatable {
     String? mayaPersonality,
     String? checkInTime,
     String? therapyExperience,
+    String? role,
+    bool? isBanned,
     DateTime? createdAt,
   }) =>
       UserModel(
@@ -148,6 +163,8 @@ class UserModel extends Equatable {
         mayaPersonality: mayaPersonality ?? this.mayaPersonality,
         checkInTime: checkInTime ?? this.checkInTime,
         therapyExperience: therapyExperience ?? this.therapyExperience,
+        role: role ?? this.role,
+        isBanned: isBanned ?? this.isBanned,
         createdAt: createdAt ?? this.createdAt,
       );
 
@@ -155,6 +172,6 @@ class UserModel extends Equatable {
   List<Object?> get props => [
         id, email, name, preferredName, university, yearOfStudy, faculty,
         profileImageUrl, onboardingCompleted, goals, stressors,
-        mayaPersonality, checkInTime, therapyExperience, createdAt,
+        mayaPersonality, checkInTime, therapyExperience, role, isBanned, createdAt,
       ];
 }

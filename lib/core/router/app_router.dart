@@ -23,6 +23,14 @@ import '../../features/wellness/screens/wellness_plan_screen.dart';
 import '../../features/crisis/screens/crisis_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../shared/widgets/main_shell.dart';
+import '../../features/admin/screens/admin_shell.dart';
+import '../../features/admin/screens/admin_dashboard_screen.dart';
+import '../../features/admin/screens/user_management_screen.dart';
+import '../../features/admin/screens/content_moderation_screen.dart';
+import '../../features/admin/screens/crisis_monitor_screen.dart';
+import '../../features/admin/screens/admin_analytics_screen.dart';
+import '../../features/admin/screens/broadcast_screen.dart';
+import '../../features/admin/screens/admin_settings_screen.dart';
 
 // ─── Route Names ──────────────────────────────────────────
 abstract class AppRoutes {
@@ -46,6 +54,15 @@ abstract class AppRoutes {
   static const String profile = '/profile';
   static const String verifyEmail = '/verify-email';
   static const String forgotPassword = '/forgot-password';
+
+  // ─── Admin Routes ──────────────────────────────────────
+  static const String adminDashboard = '/admin/dashboard';
+  static const String adminUsers = '/admin/users';
+  static const String adminModeration = '/admin/moderation';
+  static const String adminCrisis = '/admin/crisis';
+  static const String adminAnalytics = '/admin/analytics';
+  static const String adminBroadcast = '/admin/broadcast';
+  static const String adminSettings = '/admin/settings';
 }
 
 // ─── Auth Listenable ──────────────────────────────────────
@@ -96,12 +113,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isOnOnboarding = location == AppRoutes.onboarding;
       final isOnAuthPage = location == AppRoutes.login ||
           location == AppRoutes.register;
+      final isOnAdminPage = location.startsWith('/admin');
 
       // Let splash handle initial routing
       if (isOnSplash) return null;
 
-      // Still loading — stay on splash
-      if (isLoading) return AppRoutes.splash;
+      // Only block navigation during app cold-start (initial), not during
+      // in-progress login/register operations — those pages show their own
+      // loading spinners and will get redirected once auth resolves.
+      if (status == AuthStatus.initial) return AppRoutes.splash;
+      if (status == AuthStatus.loading && !isOnAuthPage && !isOnForgot) {
+        return AppRoutes.splash;
+      }
 
       // Password reset flow — keep them on the forgot-password screen
       if (isInResetFlow && !isOnForgot) return AppRoutes.forgotPassword;
@@ -111,7 +134,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (isPendingVerification && !isOnVerify) return AppRoutes.verifyEmail;
 
       // Verified user on verify screen — move along
-      if (isAuthenticated && isOnVerify) return AppRoutes.home;
+      if (isAuthenticated && isOnVerify) {
+        // If admin, go to admin dashboard
+        if (authState.user?.isAdmin == true) return AppRoutes.adminDashboard;
+        return AppRoutes.home;
+      }
 
       // Not authenticated — allow forgot-password and auth pages through
       if (!isAuthenticated && !isPendingVerification && !isInResetFlow &&
@@ -119,24 +146,48 @@ final routerProvider = Provider<GoRouter>((ref) {
         return AppRoutes.login;
       }
 
-      // Authenticated but somehow on forgot-password → go home
-      if (isAuthenticated && isOnForgot) return AppRoutes.home;
+      // Authenticated but somehow on forgot-password → go home/admin
+      if (isAuthenticated && isOnForgot) {
+        return authState.user?.isAdmin == true
+            ? AppRoutes.adminDashboard
+            : AppRoutes.home;
+      }
 
-      // Authenticated but on a login/register page — go home
-      if (isAuthenticated && isOnAuthPage) return AppRoutes.home;
+      // Authenticated but on a login/register page — go home/admin
+      if (isAuthenticated && isOnAuthPage) {
+        return authState.user?.isAdmin == true
+            ? AppRoutes.adminDashboard
+            : AppRoutes.home;
+      }
 
-      // Authenticated + onboarding done but still on onboarding → home
+      // Non-admin trying to access admin pages — redirect to home
+      if (isOnAdminPage && isAuthenticated && authState.user?.isAdmin != true) {
+        return AppRoutes.home;
+      }
+
+      // Authenticated + onboarding done but still on onboarding → home/admin
       if (isAuthenticated &&
           authState.user?.onboardingCompleted == true &&
           isOnOnboarding) {
-        return AppRoutes.home;
+        return authState.user?.isAdmin == true
+            ? AppRoutes.adminDashboard
+            : AppRoutes.home;
       }
 
       // Authenticated + onboarding not done + on home → onboarding
       if (isAuthenticated &&
           authState.user?.onboardingCompleted == false &&
+          !isOnAdminPage &&
           location == AppRoutes.home) {
         return AppRoutes.onboarding;
+      }
+
+      // Admin on any non-admin page → force to admin dashboard
+      if (isAuthenticated &&
+          authState.user?.isAdmin == true &&
+          !isOnAdminPage &&
+          !isOnOnboarding) {
+        return AppRoutes.adminDashboard;
       }
 
       return null;
@@ -239,6 +290,41 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.crisis,
         builder: (_, __) => const CrisisScreen(),
+      ),
+
+      // ─── Admin Shell Routes ──────────────────────────
+      ShellRoute(
+        builder: (context, state, child) => AdminShell(child: child),
+        routes: [
+          GoRoute(
+            path: AppRoutes.adminDashboard,
+            builder: (_, __) => const AdminDashboardScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.adminUsers,
+            builder: (_, __) => const UserManagementScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.adminModeration,
+            builder: (_, __) => const ContentModerationScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.adminCrisis,
+            builder: (_, __) => const CrisisMonitorScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.adminAnalytics,
+            builder: (_, __) => const AdminAnalyticsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.adminBroadcast,
+            builder: (_, __) => const BroadcastScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.adminSettings,
+            builder: (_, __) => const AdminSettingsScreen(),
+          ),
+        ],
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

@@ -48,7 +48,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final ok = await ref
         .read(authProvider.notifier)
         .login(_emailCtrl.text.trim(), _passCtrl.text);
-    if (ok && mounted) context.go(AppRoutes.home);
+    if (!ok || !mounted) return;
+    final user = ref.read(authProvider).user;
+    if (user?.isAdmin == true) {
+      context.go(AppRoutes.adminDashboard);
+    } else {
+      context.go(AppRoutes.home);
+    }
   }
 
   void _showForgotDialog() => context.push(AppRoutes.forgotPassword);

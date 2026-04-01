@@ -89,7 +89,11 @@ class SupabaseService {
   }
 
   static Future<void> upsertProfile(UserModel user) async {
-    await _db.from('profiles').upsert(user.toSupabaseJson());
+    await _db.from('profiles').upsert(
+      user.toSupabaseJson(),
+      onConflict: 'id',
+      ignoreDuplicates: false,
+    );
   }
 
   static Future<UserModel?> updateProfile(

@@ -30,7 +30,7 @@ class ApiService {
       headers: {
         'Content-Type': 'application/json',
         'anthropic-version': '2023-06-01',
-        'x-api-key': const String.fromEnvironment('ANTHROPIC_API_KEY', defaultValue: ''),
+        'x-api-key': const String.fromEnvironment('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'),
       },
     ));
 

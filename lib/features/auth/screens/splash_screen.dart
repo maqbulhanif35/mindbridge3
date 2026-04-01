@@ -17,6 +17,8 @@ class SplashScreen extends ConsumerStatefulWidget {
 class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
+  bool _minDelayDone = false;
+  bool _navigated = false;
 
   @override
   void initState() {
@@ -26,19 +28,30 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       duration: const Duration(milliseconds: 2000),
     )..forward();
 
+    // Minimum splash display time
     Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) _navigate();
+      if (!mounted) return;
+      _minDelayDone = true;
+      _tryNavigate();
     });
   }
 
-  void _navigate() {
+  void _tryNavigate() {
+    if (_navigated || !mounted) return;
     final auth = ref.read(authProvider);
+
+    // Still loading — wait for the listener to fire
+    if (auth.status == AuthStatus.initial || auth.status == AuthStatus.loading) return;
+
+    _navigated = true;
     if (auth.isPendingVerification) {
       context.go(AppRoutes.verifyEmail);
     } else if (auth.isAuthenticated) {
       final user = auth.user;
       if (user?.onboardingCompleted == false) {
         context.go(AppRoutes.onboarding);
+      } else if (user?.isAdmin == true) {
+        context.go(AppRoutes.adminDashboard);
       } else {
         context.go(AppRoutes.home);
       }
@@ -55,6 +68,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Listen for auth state changes — navigate as soon as auth resolves AND min delay is done
+    ref.listen<AuthState>(authProvider, (_, next) {
+      if (!_minDelayDone) return; // still showing splash animation
+      if (next.status == AuthStatus.initial || next.status == AuthStatus.loading) return;
+      _tryNavigate();
+    });
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
