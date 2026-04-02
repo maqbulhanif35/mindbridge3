@@ -556,46 +556,87 @@ class _StatsHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0D5C57), AppColors.primary],
+        ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: AppRadius.smAll,
+                  ),
+                  child: const Icon(LucideIcons.users, size: 18, color: Colors.white),
+                ),
+                const SizedBox(width: 12),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('User Management',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16)),
+                    Text('Manage accounts, roles & access',
+                        style: TextStyle(color: Colors.white70, fontSize: 11)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+            child: Row(
+              children: [
           _StatChip(
             icon: LucideIcons.users,
             label: 'Total',
             value: stats.totalUsers.toString(),
             color: AppColors.primary,
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           _StatChip(
             icon: LucideIcons.activity,
             label: 'Active Today',
             value: stats.activeToday.toString(),
             color: AppColors.success,
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           _StatChip(
             icon: LucideIcons.userPlus,
             label: 'New This Week',
             value: stats.newUsersThisWeek.toString(),
             color: AppColors.info,
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           _StatChip(
             icon: LucideIcons.ban,
             label: 'Banned',
             value: stats.bannedUsers.toString(),
             color: AppColors.error,
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           _StatChip(
             icon: LucideIcons.loader,
             label: 'Pending',
             value: stats.pendingOnboarding.toString(),
             color: AppColors.warning,
+          ),
+              ],
+            ),
           ),
         ],
       ),
@@ -621,28 +662,28 @@ class _StatChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: AppRadius.smAll,
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: color),
+          Icon(icon, size: 13, color: Colors.white70),
           const SizedBox(width: 6),
           Text(
             value,
-            style: TextStyle(
+            style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
-                color: color),
+                color: Colors.white),
           ),
           const SizedBox(width: 4),
           Text(
             label,
-            style: TextStyle(
+            style: const TextStyle(
                 fontSize: 11,
-                color: color.withValues(alpha: 0.8)),
+                color: Colors.white60),
           ),
         ],
       ),
@@ -685,151 +726,158 @@ class _UserToolbar extends StatelessWidget {
     this.onBulkExport,
   });
 
+  Widget _searchField() => Container(
+        height: 38,
+        decoration: BoxDecoration(
+          color: AppColors.surfaceVariant,
+          borderRadius: AppRadius.smAll,
+        ),
+        child: TextField(
+          controller: searchCtrl,
+          onChanged: onSearch,
+          decoration: const InputDecoration(
+            hintText: 'Search name, email, university…',
+            hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 13),
+            prefixIcon: Icon(LucideIcons.search, size: 15, color: AppColors.textMuted),
+            border: InputBorder.none,
+            contentPadding: EdgeInsets.symmetric(vertical: 10),
+          ),
+          style: const TextStyle(fontSize: 13),
+        ),
+      );
+
+  Widget _roleDropdown() => Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.border),
+          borderRadius: AppRadius.smAll,
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: selectedRole,
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            items: const [
+              DropdownMenuItem(value: 'all', child: Text('All Roles')),
+              DropdownMenuItem(value: 'user', child: Text('Users')),
+              DropdownMenuItem(value: 'admin', child: Text('Admins')),
+              DropdownMenuItem(value: 'superadmin', child: Text('Superadmins')),
+            ],
+            onChanged: (v) => onRoleFilter(v ?? 'all'),
+          ),
+        ),
+      );
+
+  Widget _bannedChip() => FilterChip(
+        label: const Text('Banned', style: TextStyle(fontSize: 11)),
+        selected: showBannedOnly,
+        onSelected: (_) => onBannedToggle(),
+        selectedColor: AppColors.errorContainer,
+        checkmarkColor: AppColors.error,
+        visualDensity: VisualDensity.compact,
+      );
+
+  Widget _bulkBtn() => Tooltip(
+        message: bulkMode ? 'Exit bulk select' : 'Bulk select',
+        child: InkWell(
+          borderRadius: AppRadius.smAll,
+          onTap: onToggleBulk,
+          child: Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: bulkMode ? AppColors.primary.withValues(alpha: 0.1) : Colors.transparent,
+              border: Border.all(color: bulkMode ? AppColors.primary : AppColors.border),
+              borderRadius: AppRadius.smAll,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(LucideIcons.squareCheck,
+                    size: 14,
+                    color: bulkMode ? AppColors.primary : AppColors.textMuted),
+                const SizedBox(width: 4),
+                Text(
+                  bulkMode && selectedCount > 0 ? '$selectedCount sel.' : 'Select',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: bulkMode ? AppColors.primary : AppColors.textMuted,
+                      fontWeight: bulkMode ? FontWeight.w600 : null),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+  Widget _exportBtn() => OutlinedButton.icon(
+        onPressed: onExport,
+        icon: const Icon(LucideIcons.download, size: 14),
+        label: const Text('Export', style: TextStyle(fontSize: 12)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.textSecondary,
+          side: const BorderSide(color: AppColors.border),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          visualDensity: VisualDensity.compact,
+        ),
+      );
+
+  Widget _addBtn() => ElevatedButton.icon(
+        onPressed: onCreateUser,
+        icon: const Icon(LucideIcons.userPlus, size: 14),
+        label: const Text('Add User', style: TextStyle(fontSize: 12)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          visualDensity: VisualDensity.compact,
+          elevation: 0,
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.sizeOf(context).width < 700;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      child: Row(
-        children: [
-          // Search
-          Expanded(
-            child: Container(
-              height: 38,
-              decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
-                borderRadius: AppRadius.smAll,
-              ),
-              child: TextField(
-                controller: searchCtrl,
-                onChanged: onSearch,
-                decoration: const InputDecoration(
-                  hintText: 'Search name, email, university…',
-                  hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 13),
-                  prefixIcon: Icon(LucideIcons.search,
-                      size: 15, color: AppColors.textMuted),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 10),
-                ),
-                style: const TextStyle(fontSize: 13),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-
-          // Role filter
-          Container(
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              border: Border.all(color: AppColors.border),
-              borderRadius: AppRadius.smAll,
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: selectedRole,
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                items: const [
-                  DropdownMenuItem(value: 'all', child: Text('All Roles')),
-                  DropdownMenuItem(value: 'user', child: Text('Users')),
-                  DropdownMenuItem(value: 'admin', child: Text('Admins')),
-                  DropdownMenuItem(value: 'superadmin', child: Text('Superadmins')),
-                ],
-                onChanged: (v) => onRoleFilter(v ?? 'all'),
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-
-          // Banned toggle
-          FilterChip(
-            label: const Text('Banned Only', style: TextStyle(fontSize: 11)),
-            selected: showBannedOnly,
-            onSelected: (_) => onBannedToggle(),
-            selectedColor: AppColors.errorContainer,
-            checkmarkColor: AppColors.error,
-            visualDensity: VisualDensity.compact,
-          ),
-          const SizedBox(width: 6),
-
-          // Bulk select toggle
-          Tooltip(
-            message: bulkMode ? 'Exit bulk select' : 'Bulk select',
-            child: InkWell(
-              borderRadius: AppRadius.smAll,
-              onTap: onToggleBulk,
-              child: Container(
-                height: 36,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color: bulkMode
-                      ? AppColors.primary.withValues(alpha: 0.1)
-                      : Colors.transparent,
-                  border: Border.all(
-                      color: bulkMode ? AppColors.primary : AppColors.border),
-                  borderRadius: AppRadius.smAll,
-                ),
-                child: Row(
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _searchField(),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
                   children: [
-                    Icon(LucideIcons.squareCheck,
-                        size: 14,
-                        color: bulkMode
-                            ? AppColors.primary
-                            : AppColors.textMuted),
-                    const SizedBox(width: 4),
-                    Text(
-                      bulkMode && selectedCount > 0
-                          ? '$selectedCount selected'
-                          : 'Select',
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: bulkMode
-                              ? AppColors.primary
-                              : AppColors.textMuted,
-                          fontWeight: bulkMode ? FontWeight.w600 : null),
-                    ),
+                    _roleDropdown(),
+                    _bannedChip(),
+                    _bulkBtn(),
+                    _exportBtn(),
+                    _addBtn(),
                   ],
                 ),
-              ),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(child: _searchField()),
+                const SizedBox(width: 8),
+                _roleDropdown(),
+                const SizedBox(width: 6),
+                _bannedChip(),
+                const SizedBox(width: 6),
+                _bulkBtn(),
+                const SizedBox(width: 6),
+                _exportBtn(),
+                const SizedBox(width: 6),
+                _addBtn(),
+              ],
             ),
-          ),
-          const SizedBox(width: 6),
-
-          // Export button
-          Tooltip(
-            message: 'Export CSV',
-            child: OutlinedButton.icon(
-              onPressed: onExport,
-              icon: const Icon(LucideIcons.download, size: 14),
-              label: const Text('Export', style: TextStyle(fontSize: 12)),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.textSecondary,
-                side: const BorderSide(color: AppColors.border),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-
-          // Create User button
-          ElevatedButton.icon(
-            onPressed: onCreateUser,
-            icon: const Icon(LucideIcons.userPlus, size: 14),
-            label: const Text('Add User', style: TextStyle(fontSize: 12)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-              visualDensity: VisualDensity.compact,
-              elevation: 0,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1149,6 +1197,11 @@ class _UserRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final roleColor = _roleColor(user.role);
+    final isMobile = MediaQuery.sizeOf(context).width < 700;
+
+    if (isMobile) {
+      return _buildMobileCard(context, ref, roleColor);
+    }
 
     return Material(
       color: Colors.transparent,
@@ -1360,6 +1413,131 @@ class _UserRow extends ConsumerWidget {
       default:
         return AppColors.textSecondary;
     }
+  }
+
+  Widget _buildMobileCard(BuildContext context, WidgetRef ref, Color roleColor) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: AppRadius.mdAll,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppColors.primaryContainer
+                : user.isBanned
+                    ? AppColors.errorContainer
+                    : Colors.white,
+            borderRadius: AppRadius.mdAll,
+            border: Border.all(
+              color: isSelected
+                  ? AppColors.primary.withValues(alpha: 0.4)
+                  : user.isBanned
+                      ? AppColors.error.withValues(alpha: 0.3)
+                      : AppColors.border,
+            ),
+          ),
+          child: Row(
+            children: [
+              if (bulkMode) ...[
+                Checkbox(
+                  value: isSelected,
+                  onChanged: (_) => onTap(),
+                  activeColor: AppColors.primary,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+                const SizedBox(width: 6),
+              ],
+              // Avatar
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: roleColor.withValues(alpha: 0.15),
+                  borderRadius: AppRadius.pillAll,
+                ),
+                child: Center(
+                  child: Text(
+                    user.initials,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: roleColor,
+                        fontSize: 14),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              // Name + email + role
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            user.name,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                                color: AppColors.textPrimary),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (user.isBanned) ...[
+                          const SizedBox(width: 5),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: AppColors.error,
+                              borderRadius: AppRadius.xsAll,
+                            ),
+                            child: const Text('BANNED',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w700)),
+                          ),
+                        ],
+                      ],
+                    ),
+                    Text(
+                      user.email,
+                      style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    _RoleBadge(role: user.role),
+                  ],
+                ),
+              ),
+              // Compact actions
+              if (!bulkMode)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _ActionIcon(
+                      icon: LucideIcons.eye,
+                      color: AppColors.textMuted,
+                      tooltip: 'View',
+                      onTap: onTap,
+                    ),
+                    _ActionIcon(
+                      icon: user.isBanned ? LucideIcons.lockOpen : LucideIcons.ban,
+                      color: user.isBanned ? AppColors.success : AppColors.error,
+                      tooltip: user.isBanned ? 'Unban' : 'Ban',
+                      onTap: onBan,
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+    ).animate(delay: delay).fadeIn(duration: 180.ms).slideY(begin: 0.04);
   }
 
   static Future<void> _showEmailDialog(

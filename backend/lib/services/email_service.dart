@@ -63,6 +63,27 @@ class EmailService {
         html: _welcomeHtml(name: name, appUrl: _appUrl),
       );
 
+  // ── Admin → User direct message ──────────────────────────
+
+  static Future<bool> sendAdminMessage({
+    required String toEmail,
+    required String toName,
+    required String subject,
+    required String message,
+    required String fromAdmin,
+  }) =>
+      _send(
+        to: toEmail,
+        subject: subject,
+        html: _adminMessageHtml(
+          toName: toName,
+          subject: subject,
+          message: message,
+          fromAdmin: fromAdmin,
+          appUrl: _appUrl,
+        ),
+      );
+
   // ── OTP Email (password reset / re-verification) ────────
 
   static Future<bool> sendOtp({
@@ -276,4 +297,63 @@ class EmailService {
 </html>
 ''';
   }
+
+  static String _adminMessageHtml({
+    required String toName,
+    required String subject,
+    required String message,
+    required String fromAdmin,
+    required String appUrl,
+  }) => '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>$subject</title>
+<style>
+  body { margin:0; padding:0; background:#F5F7FA; font-family:'Segoe UI',Arial,sans-serif; }
+  .wrap { max-width:560px; margin:40px auto; background:#FFFFFF; border-radius:20px; overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,0.10); }
+  .hero { background:linear-gradient(135deg,#007A75 0%,#00BEB4 60%,#0EA5E9 100%); padding:36px 40px 32px; text-align:center; }
+  .hero-icon { font-size:40px; line-height:1; margin-bottom:10px; }
+  .hero-title { color:#fff; font-size:22px; font-weight:800; margin:0; }
+  .hero-sub { color:rgba(255,255,255,0.82); font-size:13px; margin:8px 0 0; }
+  .body { padding:36px 40px; }
+  .greeting { font-size:17px; font-weight:700; color:#1A202C; margin:0 0 16px; }
+  .message-box { background:#F8FAFC; border-left:4px solid #00BEB4; border-radius:0 12px 12px 0; padding:20px 24px; margin:0 0 24px; }
+  .message-text { font-size:15px; color:#2D3748; line-height:1.75; margin:0; white-space:pre-wrap; }
+  .from { font-size:13px; color:#718096; margin:20px 0 0; }
+  .from strong { color:#4A5568; }
+  .divider { height:1px; background:#E8EDF2; margin:24px 0; }
+  .footer { text-align:center; padding:0 40px 32px; }
+  .footer p { font-size:12px; color:#A0AEC0; margin:0 0 6px; line-height:1.6; }
+  .footer a { color:#00BEB4; text-decoration:none; }
+  .btn { display:inline-block; background:linear-gradient(135deg,#00BEB4,#0EA5E9); color:#fff; text-decoration:none; padding:13px 32px; border-radius:50px; font-size:14px; font-weight:700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div class="hero-icon">📬</div>
+    <h1 class="hero-title">Message from MindBridge</h1>
+    <p class="hero-sub">$fromAdmin · Admin Team</p>
+  </div>
+  <div class="body">
+    <p class="greeting">Hi $toName,</p>
+    <div class="message-box">
+      <p class="message-text">$message</p>
+    </div>
+    <p class="from">Sent by <strong>$fromAdmin</strong> · MindBridge Admin Team</p>
+    <div class="divider"></div>
+    <div style="text-align:center;margin:20px 0;">
+      <a href="$appUrl" class="btn">Open MindBridge →</a>
+    </div>
+  </div>
+  <div class="footer">
+    <p>© 2025 MindBridge · <a href="$appUrl">mindbridge-teal.vercel.app</a></p>
+  </div>
+</div>
+</body>
+</html>
+''';
 }

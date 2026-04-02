@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
@@ -10,160 +9,302 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../providers/admin_provider.dart';
 
-// ─── Models ───────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────────────────────
 
-class _CrisisNote {
+enum _Status {
+  newCase,
+  acknowledged,
+  inProgress,
+  escalated,
+  resolved,
+  closed;
+
+  String get label => switch (this) {
+    newCase      => 'New',
+    acknowledged => 'Acknowledged',
+    inProgress   => 'In Progress',
+    escalated    => 'Escalated',
+    resolved     => 'Resolved',
+    closed       => 'Closed',
+  };
+
+  Color get color => switch (this) {
+    newCase      => AppColors.error,
+    acknowledged => AppColors.warning,
+    inProgress   => AppColors.info,
+    escalated    => const Color(0xFF7C3AED),
+    resolved     => AppColors.success,
+    closed       => AppColors.textMuted,
+  };
+
+  IconData get icon => switch (this) {
+    newCase      => LucideIcons.circleAlert,
+    acknowledged => LucideIcons.eye,
+    inProgress   => LucideIcons.clock,
+    escalated    => LucideIcons.triangleAlert,
+    resolved     => LucideIcons.circleCheck,
+    closed       => LucideIcons.archive,
+  };
+
+  bool get isActive => this != _Status.resolved && this != _Status.closed;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Models
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _Note {
   final String id;
   final String text;
-  final String adminName;
-  final DateTime createdAt;
-
-  const _CrisisNote({
-    required this.id,
-    required this.text,
-    required this.adminName,
-    required this.createdAt,
-  });
+  final String author;
+  final DateTime at;
+  const _Note({required this.id, required this.text, required this.author, required this.at});
 }
 
-class _ChatMessage {
+class _ContactLog {
+  final String method;
+  final String note;
+  final DateTime at;
+  const _ContactLog({required this.method, required this.note, required this.at});
+}
+
+class _Case {
   final String id;
-  final String content;
-  final String role; // 'user' | 'assistant'
-  final DateTime createdAt;
-  final int tier; // 0 if not flagged
-
-  const _ChatMessage({
-    required this.id,
-    required this.content,
-    required this.role,
-    required this.createdAt,
-    required this.tier,
-  });
-}
-
-class _CrisisEntry {
-  final String messageId;
-  final String sessionId;
-  final String content;
   final String userId;
   final String userName;
   final String userEmail;
   final String? university;
+  final String content;
   final int tier;
   final DateTime createdAt;
-  bool resolved;
-  DateTime? resolvedAt;
+  _Status status;
+  double riskScore;
   String? assignedTo;
-  List<_CrisisNote> notes;
+  String? escalationTarget;
+  DateTime? acknowledgedAt;
+  DateTime? resolvedAt;
+  List<_Note> notes;
+  List<_ContactLog> contacts;
+  List<String> categories;
+  bool flagged;
 
-  _CrisisEntry({
-    required this.messageId,
-    required this.sessionId,
-    required this.content,
+  _Case({
+    required this.id,
     required this.userId,
     required this.userName,
     required this.userEmail,
     this.university,
+    required this.content,
     required this.tier,
     required this.createdAt,
-    this.resolved = false,
-    this.resolvedAt,
+    this.status = _Status.newCase,
+    this.riskScore = 0,
     this.assignedTo,
-    List<_CrisisNote>? notes,
-  }) : notes = notes ?? [];
+    this.escalationTarget,
+    this.acknowledgedAt,
+    this.resolvedAt,
+    List<_Note>? notes,
+    List<_ContactLog>? contacts,
+    List<String>? categories,
+    this.flagged = false,
+  })  : notes = notes ?? [],
+        contacts = contacts ?? [],
+        categories = categories ?? [];
 
-  _CrisisEntry copyWith({
-    bool? resolved,
-    DateTime? resolvedAt,
-    String? assignedTo,
-    List<_CrisisNote>? notes,
-  }) => _CrisisEntry(
-    messageId: messageId,
-    sessionId: sessionId,
-    content: content,
-    userId: userId,
-    userName: userName,
-    userEmail: userEmail,
-    university: university,
-    tier: tier,
-    createdAt: createdAt,
-    resolved: resolved ?? this.resolved,
-    resolvedAt: resolvedAt ?? this.resolvedAt,
-    assignedTo: assignedTo ?? this.assignedTo,
-    notes: notes ?? this.notes,
-  );
+  Duration get age => DateTime.now().difference(createdAt);
+  bool get isActive => status.isActive;
+  bool get isOverSla => isActive && age > _slaDuration(tier);
 }
 
-// ─── Tier Detection ───────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Keyword Lists (4-tier)
+// ─────────────────────────────────────────────────────────────────────────────
 
-const _tier3Keywords = [
-  'suicide', 'kill myself', 'end it all', 'dont want to live',
-  'want to die', 'harm myself', 'self harm', 'overdose',
-  'end my life', 'no reason to live', 'want to end',
-  'take my life', 'not worth living',
+const _t4 = [
+  'going to kill myself', 'have a plan', 'goodbye everyone', 'last message',
+  'ending it tonight', 'have the pills ready', 'already decided',
+  'by the time you read this', 'farewell', 'won\'t be here tomorrow',
+  'tonight is my last', 'saying my goodbyes',
 ];
-const _tier2Keywords = [
-  'hopeless', 'no point', 'cant go on', "can't go on", 'giving up',
-  'worthless', 'nobody cares', 'depressed', 'crying', 'hurt myself',
-  'cutting', 'not okay', 'cant handle', "can't handle",
+
+const _t3 = [
+  'suicidal', 'suicide', 'kill myself', 'end my life', 'want to die',
+  'take my life', 'no reason to live', 'rather be dead', 'better off dead',
+  'not worth living', 'end it all', 'don\'t want to exist',
+  'wishing i was dead', 'wish i could disappear forever',
 ];
-const _tier1Keywords = [
-  'stressed', 'overwhelmed', 'anxious', 'struggling', 'hard time',
-  'exhausted', 'help me', "can't take it", 'breaking down',
-  'falling apart', 'all alone', 'hate myself', 'so tired',
+
+const _t2 = [
+  'self harm', 'self-harm', 'hurting myself', 'cutting myself',
+  'hurt myself', 'hopeless', 'worthless', 'don\'t want to be here',
+  'can\'t go on', 'give up on life', 'no point anymore',
+  'everyone would be better without me', 'can\'t keep going',
+  'nothing to live for', 'too tired to continue',
+];
+
+const _t1 = [
+  'overwhelmed', 'can\'t cope', 'breaking down', 'falling apart',
+  'exhausted by life', 'deeply depressed', 'completely lost',
+  'no hope', 'can\'t handle this', 'rock bottom', 'losing my mind',
+  'anxiety is unbearable', 'crying all the time', 'don\'t see the point',
 ];
 
 int _detectTier(String content) {
   final lower = content.toLowerCase();
-  if (_tier3Keywords.any((k) => lower.contains(k))) return 3;
-  if (_tier2Keywords.any((k) => lower.contains(k))) return 2;
-  if (_tier1Keywords.any((k) => lower.contains(k))) return 1;
+  for (final k in _t4) if (lower.contains(k)) return 4;
+  for (final k in _t3) if (lower.contains(k)) return 3;
+  for (final k in _t2) if (lower.contains(k)) return 2;
+  for (final k in _t1) if (lower.contains(k)) return 1;
   return 0;
 }
 
-String _relativeTime(DateTime dt) {
-  final diff = DateTime.now().difference(dt);
-  if (diff.inSeconds < 60) return 'just now';
-  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-  if (diff.inHours < 24) return '${diff.inHours}h ago';
-  if (diff.inDays < 7) return '${diff.inDays}d ago';
+List<String> _detectCategories(String content) {
+  final lower = content.toLowerCase();
+  final cats = <String>[];
+  if (lower.contains('suicid') || lower.contains('kill myself') || lower.contains('end my life')) cats.add('Suicidal Ideation');
+  if (lower.contains('self harm') || lower.contains('cutting') || lower.contains('hurt myself')) cats.add('Self-Harm');
+  if (lower.contains('anxi') || lower.contains('panic')) cats.add('Anxiety/Panic');
+  if (lower.contains('depress')) cats.add('Depression');
+  if (lower.contains('abus') || lower.contains('assault') || lower.contains('violen')) cats.add('Abuse/Violence');
+  if (lower.contains('drug') || lower.contains('overdose') || lower.contains('substance')) cats.add('Substance Use');
+  if (lower.contains('eating') || lower.contains('starv') || lower.contains('purge')) cats.add('Eating Disorder');
+  if (lower.contains('alone') || lower.contains('lonely') || lower.contains('isolated')) cats.add('Isolation');
+  if (lower.contains('academ') || lower.contains('exam') || lower.contains('fail')) cats.add('Academic Stress');
+  return cats;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+Duration _slaDuration(int tier) => switch (tier) {
+  4 => const Duration(minutes: 5),
+  3 => const Duration(minutes: 15),
+  2 => const Duration(minutes: 30),
+  _ => const Duration(hours: 2),
+};
+
+Color _tierColor(int tier) => switch (tier) {
+  4 => const Color(0xFF991B1B),
+  3 => AppColors.error,
+  2 => AppColors.warning,
+  _ => AppColors.info,
+};
+
+String _tierLabel(int tier) => switch (tier) {
+  4 => 'IMMINENT',
+  3 => 'CRITICAL',
+  2 => 'HIGH RISK',
+  _ => 'MODERATE',
+};
+
+Color _riskColor(double score) {
+  if (score >= 70) return AppColors.error;
+  if (score >= 45) return AppColors.warning;
+  return AppColors.info;
+}
+
+String _relTime(DateTime dt) {
+  final d = DateTime.now().difference(dt);
+  if (d.inSeconds < 60) return 'just now';
+  if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+  if (d.inHours < 24) return '${d.inHours}h ago';
+  if (d.inDays < 7) return '${d.inDays}d ago';
   return DateFormat('MMM d').format(dt);
 }
 
-enum _TierFilter { all, critical, high, moderate }
+String _slaText(Duration age, int tier) {
+  final sla = _slaDuration(tier);
+  if (age > sla) {
+    final over = age - sla;
+    return over.inMinutes < 60 ? '+${over.inMinutes}m OVERDUE' : '+${over.inHours}h OVERDUE';
+  }
+  final rem = sla - age;
+  return rem.inMinutes < 60 ? '${rem.inMinutes}m left' : '${rem.inHours}h left';
+}
 
-// ─── Main Screen ──────────────────────────────────────────
+Color _slaColor(Duration age, int tier) {
+  final sla = _slaDuration(tier);
+  if (age > sla) return AppColors.error;
+  if (age.inSeconds / sla.inSeconds > 0.75) return AppColors.warning;
+  return AppColors.success;
+}
+
+double _calcRisk(int tier, {bool late = false, bool repeated = false}) {
+  double base = switch (tier) { 4 => 92, 3 => 72, 2 => 48, _ => 22 };
+  if (repeated) base += 8;
+  if (late) base += 5;
+  return base.clamp(0, 100);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Screen
+// ─────────────────────────────────────────────────────────────────────────────
 
 class CrisisMonitorScreen extends ConsumerStatefulWidget {
   const CrisisMonitorScreen({super.key});
-
   @override
-  ConsumerState<CrisisMonitorScreen> createState() =>
-      _CrisisMonitorScreenState();
+  ConsumerState<CrisisMonitorScreen> createState() => _State();
 }
 
-class _CrisisMonitorScreenState extends ConsumerState<CrisisMonitorScreen>
+class _State extends ConsumerState<CrisisMonitorScreen>
     with SingleTickerProviderStateMixin {
-  late TabController _tabs;
-  List<_CrisisEntry> _active = [];
-  List<_CrisisEntry> _resolved = [];
+  List<_Case> _cases = [];
   bool _loading = true;
-  DateTime? _lastChecked;
-  Timer? _autoRefresh;
-  _TierFilter _tierFilter = _TierFilter.all;
-  bool _keywordPanelExpanded = false;
-  String _searchQuery = '';
   bool _liveMode = true;
-  RealtimeChannel? _realtimeChannel;
-  int _newAlertsCount = 0;
+  String _search = '';
+  int? _filterTier;
+  _Status? _filterStatus;
+  bool _unassignedOnly = false;
+  Set<String> _selected = {};
+  _Case? _detail;
+  int _newAlerts = 0;
+  late TabController _tabs;
+  final _searchCtrl = TextEditingController();
+  Timer? _ticker;
+  RealtimeChannel? _channel;
+
+  // ── Getters ──────────────────────────────────────────────
+
+  List<_Case> get _new    => _filter(_cases.where((c) => c.status == _Status.newCase).toList());
+  List<_Case> get _active => _filter(_cases.where((c) =>
+    c.status == _Status.acknowledged ||
+    c.status == _Status.inProgress ||
+    c.status == _Status.escalated).toList());
+  List<_Case> get _done   => _filter(_cases.where((c) =>
+    c.status == _Status.resolved ||
+    c.status == _Status.closed).toList());
+
+  List<_Case> _filter(List<_Case> list) {
+    var r = list;
+    if (_search.isNotEmpty) {
+      final q = _search.toLowerCase();
+      r = r.where((c) =>
+        c.userName.toLowerCase().contains(q) ||
+        c.userEmail.toLowerCase().contains(q) ||
+        c.content.toLowerCase().contains(q) ||
+        (c.university?.toLowerCase().contains(q) ?? false)).toList();
+    }
+    if (_filterTier != null) r = r.where((c) => c.tier == _filterTier).toList();
+    if (_filterStatus != null) r = r.where((c) => c.status == _filterStatus).toList();
+    if (_unassignedOnly) r = r.where((c) => c.assignedTo == null).toList();
+    return r;
+  }
+
+  int get _overdueCount => _cases.where((c) => c.isOverSla).length;
+  int get _criticalCount => _cases.where((c) => c.tier >= 3 && c.isActive).length;
+
+  // ── Lifecycle ────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 3, vsync: this);
     _load();
-    _autoRefresh = Timer.periodic(const Duration(minutes: 2), (_) {
+    _ticker = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});           // refresh SLA timers
       if (_liveMode) _load(silent: true);
     });
     _subscribeRealtime();
@@ -172,1514 +313,788 @@ class _CrisisMonitorScreenState extends ConsumerState<CrisisMonitorScreen>
   @override
   void dispose() {
     _tabs.dispose();
-    _autoRefresh?.cancel();
-    _realtimeChannel?.unsubscribe();
+    _ticker?.cancel();
+    _channel?.unsubscribe();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
   void _subscribeRealtime() {
-    final db = Supabase.instance.client;
-    _realtimeChannel = db
-        .channel('crisis-monitor')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'chat_messages',
-          callback: (payload) {
-            final row = payload.newRecord;
-            final role = row['role'] as String? ?? '';
-            final content = row['content'] as String? ?? '';
-            if (role == 'user' && _detectTier(content) > 0) {
-              setState(() => _newAlertsCount++);
+    _channel = Supabase.instance.client
+      .channel('crisis-v5')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'chat_messages',
+        callback: (p) {
+          final row = p.newRecord;
+          if ((row['role'] as String? ?? '') == 'user') {
+            final t = _detectTier(row['content'] as String? ?? '');
+            if (t > 0) {
+              if (mounted) setState(() => _newAlerts++);
               _load(silent: true);
             }
-          },
-        )
-        .subscribe();
+          }
+        },
+      ).subscribe();
   }
 
   Future<void> _load({bool silent = false}) async {
-    if (!silent) setState(() => _loading = true);
+    if (!silent && mounted) setState(() => _loading = true);
     try {
-      final db = Supabase.instance.client;
-      final messages = await db
-          .from('chat_messages')
-          .select('''
-            id, content, created_at, session_id,
-            chat_sessions!inner(user_id, title,
-              profiles!inner(id, name, email, university))
-          ''')
-          .eq('role', 'user')
-          .order('created_at', ascending: false)
-          .limit(500);
+      final rows = await Supabase.instance.client
+        .from('chat_messages')
+        .select('''
+          id, content, created_at, session_id,
+          chat_sessions!inner(user_id,
+            profiles!inner(id, name, email, university))
+        ''')
+        .eq('role', 'user')
+        .order('created_at', ascending: false)
+        .limit(600);
 
-      final entries = <_CrisisEntry>[];
-      for (final msg in messages) {
+      final entries = <_Case>[];
+      for (final msg in rows) {
         final content = (msg['content'] as String? ?? '');
         final tier = _detectTier(content);
-        if (tier > 0) {
-          final session = msg['chat_sessions'] as Map<String, dynamic>?;
-          final profile = session?['profiles'] as Map<String, dynamic>?;
-          // Preserve existing notes/assignment if already loaded
-          final existing = [
-            ..._active, ..._resolved
-          ].where((e) => e.messageId == msg['id']).firstOrNull;
-          entries.add(_CrisisEntry(
-            messageId: msg['id'] as String,
-            sessionId: msg['session_id'] as String,
-            content: content,
-            createdAt: DateTime.parse(msg['created_at'] as String),
-            tier: tier,
-            userId: profile?['id'] as String? ?? '',
-            userName: profile?['name'] as String? ?? 'Unknown',
-            userEmail: profile?['email'] as String? ?? '',
-            university: profile?['university'] as String?,
-            resolved: existing?.resolved ?? false,
-            resolvedAt: existing?.resolvedAt,
-            assignedTo: existing?.assignedTo,
-            notes: existing?.notes ?? [],
-          ));
-        }
+        if (tier == 0) continue;
+        final session = msg['chat_sessions'] as Map<String, dynamic>?;
+        final profile = session?['profiles'] as Map<String, dynamic>?;
+        final created = DateTime.tryParse(msg['created_at'] as String? ?? '') ?? DateTime.now();
+        final uid = profile?['id'] as String? ?? '';
+        final existing = _cases.where((c) => c.id == msg['id']).firstOrNull;
+        final repeated = entries.any((e) => e.userId == uid);
+        final lateNight = created.hour >= 22 || created.hour <= 5;
+        entries.add(_Case(
+          id: msg['id'] as String,
+          userId: uid,
+          userName: profile?['name'] as String? ?? 'Unknown',
+          userEmail: profile?['email'] as String? ?? '',
+          university: profile?['university'] as String?,
+          content: content,
+          tier: tier,
+          createdAt: created,
+          status: existing?.status ?? _Status.newCase,
+          riskScore: _calcRisk(tier, late: lateNight, repeated: repeated),
+          assignedTo: existing?.assignedTo,
+          escalationTarget: existing?.escalationTarget,
+          acknowledgedAt: existing?.acknowledgedAt,
+          resolvedAt: existing?.resolvedAt,
+          notes: existing?.notes ?? [],
+          contacts: existing?.contacts ?? [],
+          categories: _detectCategories(content),
+          flagged: existing?.flagged ?? false,
+        ));
       }
 
       entries.sort((a, b) {
-        if (!a.resolved && b.resolved) return -1;
-        if (a.resolved && !b.resolved) return 1;
+        if (a.isActive && !b.isActive) return -1;
+        if (!a.isActive && b.isActive) return 1;
         final tc = b.tier.compareTo(a.tier);
-        return tc != 0 ? tc : b.createdAt.compareTo(a.createdAt);
+        if (tc != 0) return tc;
+        if (a.isOverSla && !b.isOverSla) return -1;
+        if (!a.isOverSla && b.isOverSla) return 1;
+        return b.createdAt.compareTo(a.createdAt);
       });
 
-      if (mounted) {
-        setState(() {
-          _active = entries.where((e) => !e.resolved).toList();
-          _resolved = entries.where((e) => e.resolved).toList();
-          _loading = false;
-          _lastChecked = DateTime.now();
-          _newAlertsCount = 0;
-        });
-      }
+      if (mounted) setState(() {
+        _cases = entries;
+        _loading = false;
+        _newAlerts = 0;
+      });
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  void _markResolved(String messageId) {
-    setState(() {
-      final idx = _active.indexWhere((e) => e.messageId == messageId);
-      if (idx >= 0) {
-        final entry = _active[idx].copyWith(
-          resolved: true,
-          resolvedAt: DateTime.now(),
-        );
-        _active.removeAt(idx);
-        _resolved.insert(0, entry);
-      }
-    });
-  }
+  // ── Mutations ────────────────────────────────────────────
 
-  void _markUnresolved(String messageId) {
-    setState(() {
-      final idx = _resolved.indexWhere((e) => e.messageId == messageId);
-      if (idx >= 0) {
-        final entry = _resolved[idx].copyWith(resolved: false);
-        _resolved.removeAt(idx);
-        _active.insert(0, entry);
-      }
-    });
-  }
+  void _setStatus(String id, _Status s) => setState(() {
+    final c = _cases.firstWhere((c) => c.id == id);
+    c.status = s;
+    if (s == _Status.acknowledged) c.acknowledgedAt = DateTime.now();
+    if (s == _Status.resolved || s == _Status.closed) c.resolvedAt = DateTime.now();
+    if (_detail?.id == id) _detail = c;
+  });
 
-  void _addNote(String messageId, String text) {
-    setState(() {
-      final noteId = DateTime.now().millisecondsSinceEpoch.toString();
-      final note = _CrisisNote(
-        id: noteId,
-        text: text,
-        adminName: 'Admin',
-        createdAt: DateTime.now(),
-      );
-      // Try active first
-      final ai = _active.indexWhere((e) => e.messageId == messageId);
-      if (ai >= 0) {
-        final updated = _active[ai].copyWith(
-          notes: [..._active[ai].notes, note],
-        );
-        _active[ai] = updated;
-        return;
-      }
-      final ri = _resolved.indexWhere((e) => e.messageId == messageId);
-      if (ri >= 0) {
-        final updated = _resolved[ri].copyWith(
-          notes: [..._resolved[ri].notes, note],
-        );
-        _resolved[ri] = updated;
-      }
-    });
-  }
+  void _addNote(String id, String text) => setState(() {
+    final c = _cases.firstWhere((c) => c.id == id);
+    c.notes.add(_Note(id: '${DateTime.now().millisecondsSinceEpoch}', text: text, author: 'Admin', at: DateTime.now()));
+    if (_detail?.id == id) _detail = c;
+  });
 
-  void _assignCase(String messageId, String adminName) {
-    setState(() {
-      final ai = _active.indexWhere((e) => e.messageId == messageId);
-      if (ai >= 0) {
-        _active[ai] = _active[ai].copyWith(assignedTo: adminName);
-      }
-    });
-  }
+  void _assign(String id, String? admin) => setState(() {
+    _cases.firstWhere((c) => c.id == id).assignedTo = admin;
+  });
 
-  List<_CrisisEntry> _filtered(List<_CrisisEntry> entries) {
-    var list = entries;
-    switch (_tierFilter) {
-      case _TierFilter.critical:
-        list = list.where((e) => e.tier == 3).toList();
-      case _TierFilter.high:
-        list = list.where((e) => e.tier == 2).toList();
-      case _TierFilter.moderate:
-        list = list.where((e) => e.tier == 1).toList();
-      case _TierFilter.all:
-        break;
+  void _toggleFlag(String id) => setState(() {
+    final c = _cases.firstWhere((c) => c.id == id);
+    c.flagged = !c.flagged;
+    if (_detail?.id == id) _detail = c;
+  });
+
+  void _doEscalate(String id, String target) => setState(() {
+    final c = _cases.firstWhere((c) => c.id == id);
+    c.status = _Status.escalated;
+    c.escalationTarget = target;
+    c.contacts.add(_ContactLog(method: 'escalation', note: 'Escalated to $target', at: DateTime.now()));
+    if (_detail?.id == id) _detail = c;
+  });
+
+  void _bulkAck() => setState(() {
+    for (final id in _selected) {
+      final c = _cases.firstWhere((c) => c.id == id, orElse: () => _cases.first);
+      if (c.status == _Status.newCase) { c.status = _Status.acknowledged; c.acknowledgedAt = DateTime.now(); }
     }
-    if (_searchQuery.isNotEmpty) {
-      final q = _searchQuery.toLowerCase();
-      list = list.where((e) =>
-        e.userName.toLowerCase().contains(q) ||
-        e.userEmail.toLowerCase().contains(q) ||
-        e.content.toLowerCase().contains(q) ||
-        (e.university?.toLowerCase().contains(q) ?? false)
-      ).toList();
-    }
-    return list;
-  }
+    _selected.clear();
+  });
 
-  String get _lastCheckedLabel {
-    if (_lastChecked == null) return 'Never';
-    final diff = DateTime.now().difference(_lastChecked!);
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    return '${diff.inHours}h ago';
-  }
+  void _bulkResolve() => setState(() {
+    for (final id in _selected) {
+      final c = _cases.firstWhere((c) => c.id == id, orElse: () => _cases.first);
+      c.status = _Status.resolved;
+      c.resolvedAt = DateTime.now();
+    }
+    _selected.clear();
+  });
+
+  // ── Build ────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.sizeOf(context).width < 700;
-    final activeTier3 = _active.where((e) => e.tier == 3).length;
-    final activeTier2 = _active.where((e) => e.tier == 2).length;
-    final activeTier1 = _active.where((e) => e.tier == 1).length;
+    final w = MediaQuery.sizeOf(context).width;
+    final isDesktop = w >= 960;
+    final hasCritical = _criticalCount > 0;
 
     return Column(
       children: [
-        // ── Header ────────────────────────────────────────
-        _CrisisSummaryHeader(
-          total: _active.length,
-          tier3: activeTier3,
-          tier2: activeTier2,
-          tier1: activeTier1,
-          lastChecked: _lastCheckedLabel,
+        _HeroHeader(
+          newCount: _new.length,
+          activeCount: _active.length,
+          doneCount: _done.length,
+          overdueCount: _overdueCount,
+          criticalCount: _criticalCount,
+          newAlerts: _newAlerts,
           liveMode: _liveMode,
-          newAlerts: _newAlertsCount,
-          isMobile: isMobile,
-          onRefresh: _load,
+          hasCritical: hasCritical,
           onToggleLive: () => setState(() => _liveMode = !_liveMode),
+          onRefresh: _load,
         ),
-
-        // ── Search Bar ────────────────────────────────────
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-          child: TextField(
-            onChanged: (v) => setState(() => _searchQuery = v),
-            style: const TextStyle(fontSize: 13),
-            decoration: InputDecoration(
-              hintText: 'Search by name, email, university or message…',
-              hintStyle: const TextStyle(
-                  fontSize: 13, color: AppColors.textMuted),
-              prefixIcon: const Icon(LucideIcons.search,
-                  size: 16, color: AppColors.textMuted),
-              suffixIcon: _searchQuery.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(LucideIcons.x,
-                          size: 14, color: AppColors.textMuted),
-                      onPressed: () =>
-                          setState(() => _searchQuery = ''),
-                    )
-                  : null,
-              contentPadding: const EdgeInsets.symmetric(vertical: 8),
-              filled: true,
-              fillColor: AppColors.surfaceVariant,
-              border: OutlineInputBorder(
-                borderRadius: AppRadius.mdAll,
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
+        _ControlBar(
+          searchCtrl: _searchCtrl,
+          search: _search,
+          filterTier: _filterTier,
+          filterStatus: _filterStatus,
+          unassignedOnly: _unassignedOnly,
+          onSearch: (v) => setState(() => _search = v),
+          onTierFilter: () => _showTierFilter(),
+          onStatusFilter: () => _showStatusFilter(),
+          onToggleUnassigned: () => setState(() => _unassignedOnly = !_unassignedOnly),
+          onClearFilters: () => setState(() { _filterTier = null; _filterStatus = null; _unassignedOnly = false; }),
         ),
-
-        // ── Tier Filter Chips ─────────────────────────────
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _TierFilterChip(
-                  label: 'All',
-                  count: _active.length,
-                  color: AppColors.textSecondary,
-                  selected: _tierFilter == _TierFilter.all,
-                  onTap: () =>
-                      setState(() => _tierFilter = _TierFilter.all),
-                ),
-                const SizedBox(width: 8),
-                _TierFilterChip(
-                  label: 'Critical',
-                  count: activeTier3,
-                  color: AppColors.error,
-                  selected: _tierFilter == _TierFilter.critical,
-                  onTap: () =>
-                      setState(() => _tierFilter = _TierFilter.critical),
-                ),
-                const SizedBox(width: 8),
-                _TierFilterChip(
-                  label: 'High Risk',
-                  count: activeTier2,
-                  color: AppColors.warning,
-                  selected: _tierFilter == _TierFilter.high,
-                  onTap: () =>
-                      setState(() => _tierFilter = _TierFilter.high),
-                ),
-                const SizedBox(width: 8),
-                _TierFilterChip(
-                  label: 'Moderate',
-                  count: activeTier1,
-                  color: AppColors.info,
-                  selected: _tierFilter == _TierFilter.moderate,
-                  onTap: () =>
-                      setState(() => _tierFilter = _TierFilter.moderate),
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        // ── Tab Bar ───────────────────────────────────────
-        Container(
-          color: Colors.white,
-          child: TabBar(
-            controller: _tabs,
-            labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textMuted,
-            indicatorColor: AppColors.primary,
-            indicatorWeight: 2,
-            labelStyle:
-                const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            tabs: [
-              Tab(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('Active'),
-                    if (_active.isNotEmpty) ...[
-                      const SizedBox(width: 6),
-                      _TabBadge(_active.length, AppColors.error),
-                    ],
-                  ],
-                ),
-              ),
-              Tab(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('Resolved'),
-                    if (_resolved.isNotEmpty) ...[
-                      const SizedBox(width: 6),
-                      _TabBadge(_resolved.length,
-                          AppColors.success.withValues(alpha: 0.8)),
-                    ],
-                  ],
-                ),
-              ),
-              const Tab(text: 'All'),
-            ],
-          ),
-        ),
-
-        // ── Content ───────────────────────────────────────
+        if (_selected.isNotEmpty)
+          _BulkBar(count: _selected.length, onAck: _bulkAck, onResolve: _bulkResolve, onClear: () => setState(() => _selected.clear())),
         Expanded(
           child: _loading
-              ? const Center(
-                  child: CircularProgressIndicator(
-                      color: AppColors.primary, strokeWidth: 2))
-              : Column(
-                  children: [
-                    Expanded(
-                      child: TabBarView(
-                        controller: _tabs,
-                        children: [
-                          _CrisisListView(
-                            entries: _filtered(_active),
-                            onResolve: _markResolved,
-                            onContact: (e) =>
-                                _showContactDialog(context, e),
-                            onEscalate: (e) =>
-                                _showEscalateDialog(context, e),
-                            onViewChat: (e) =>
-                                _showFullChatDialog(context, e),
-                            onViewDetail: (e) =>
-                                _showCrisisDetail(context, e),
-                            onAddNote: (e) =>
-                                _showAddNoteDialog(context, e),
-                            onUserHistory: (e) =>
-                                _showUserHistory(context, e),
-                            onAssign: (e) =>
-                                _showAssignDialog(context, e),
-                            onQuickBan: (e) =>
-                                _quickBan(context, e),
-                            emptyTitle: _active.isEmpty
-                                ? 'No active crises'
-                                : 'No entries for this filter',
-                            emptySubtitle: _active.isEmpty
-                                ? 'No crisis indicators detected'
-                                : 'Try a different filter or search',
-                            emptyIcon: LucideIcons.shieldCheck,
-                            isGreenState: _active.isEmpty,
-                          ),
-                          _CrisisListView(
-                            entries: _filtered(_resolved),
-                            onResolve: null,
-                            onUnresolve: _markUnresolved,
-                            onContact: (e) =>
-                                _showContactDialog(context, e),
-                            onEscalate: null,
-                            onViewChat: (e) =>
-                                _showFullChatDialog(context, e),
-                            onViewDetail: (e) =>
-                                _showCrisisDetail(context, e),
-                            onAddNote: (e) =>
-                                _showAddNoteDialog(context, e),
-                            onUserHistory: (e) =>
-                                _showUserHistory(context, e),
-                            onAssign: null,
-                            onQuickBan: null,
-                            emptyTitle: 'No resolved entries',
-                            emptySubtitle:
-                                'Resolved crises will appear here',
-                            emptyIcon: LucideIcons.circleCheck,
-                            isGreenState: false,
-                          ),
-                          _CrisisListView(
-                            entries: _filtered([
-                              ..._active,
-                              ..._resolved,
-                            ]..sort((a, b) {
-                                if (!a.resolved && b.resolved)
-                                  return -1;
-                                if (a.resolved && !b.resolved) return 1;
-                                return b.createdAt
-                                    .compareTo(a.createdAt);
-                              })),
-                            onResolve: _markResolved,
-                            onUnresolve: _markUnresolved,
-                            onContact: (e) =>
-                                _showContactDialog(context, e),
-                            onEscalate: (e) =>
-                                _showEscalateDialog(context, e),
-                            onViewChat: (e) =>
-                                _showFullChatDialog(context, e),
-                            onViewDetail: (e) =>
-                                _showCrisisDetail(context, e),
-                            onAddNote: (e) =>
-                                _showAddNoteDialog(context, e),
-                            onUserHistory: (e) =>
-                                _showUserHistory(context, e),
-                            onAssign: (e) =>
-                                _showAssignDialog(context, e),
-                            onQuickBan: (e) =>
-                                _quickBan(context, e),
-                            emptyTitle: 'No crisis entries',
-                            emptySubtitle:
-                                'Crisis-flagged messages will appear here',
-                            emptyIcon: LucideIcons.shieldCheck,
-                            isGreenState:
-                                _active.isEmpty && _resolved.isEmpty,
-                          ),
-                        ],
-                      ),
-                    ),
-                    _KeywordsPanel(
-                      expanded: _keywordPanelExpanded,
-                      onToggle: () => setState(
-                          () => _keywordPanelExpanded = !_keywordPanelExpanded),
-                    ),
-                  ],
+            ? const Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2))
+            : isDesktop
+              ? _KanbanView(
+                  newCases: _new,
+                  activeCases: _active,
+                  doneCases: _done,
+                  detail: _detail,
+                  selectedIds: _selected,
+                  allCases: _cases,
+                  onTap: (c) => setState(() => _detail = _detail?.id == c.id ? null : c),
+                  onToggleSelect: (c) => setState(() { if (_selected.contains(c.id)) _selected.remove(c.id); else _selected.add(c.id); }),
+                  onSetStatus: _setStatus,
+                  onAddNote: _addNote,
+                  onAssign: _assign,
+                  onToggleFlag: _toggleFlag,
+                  onEscalate: (c, t) => _showEscalateDialog(c, t),
+                  onContact: (c) => _showContactDialog(c),
+                  onCloseDetail: () => setState(() => _detail = null),
+                )
+              : _TabsView(
+                  tabs: _tabs,
+                  newCases: _new,
+                  activeCases: _active,
+                  doneCases: _done,
+                  selectedIds: _selected,
+                  onTap: (c) => _showDetailSheet(c),
+                  onLongPress: (c) => setState(() { if (_selected.contains(c.id)) _selected.remove(c.id); else _selected.add(c.id); }),
+                  onSetStatus: _setStatus,
                 ),
         ),
       ],
     );
   }
 
-  // ─── View Full Chat Dialog ────────────────────────────
+  // ── Dialogs ──────────────────────────────────────────────
 
-  Future<void> _showFullChatDialog(
-      BuildContext context, _CrisisEntry entry) async {
-    final isMobile = MediaQuery.sizeOf(context).width < 700;
-
-    // Show loading indicator immediately
-    showDialog(
+  void _showDetailSheet(_Case c) {
+    showModalBottomSheet(
       context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(
-        child: CircularProgressIndicator(
-            color: AppColors.primary, strokeWidth: 2),
-      ),
-    );
-
-    List<_ChatMessage> messages = [];
-    try {
-      final db = Supabase.instance.client;
-      final rows = await db
-          .from('chat_messages')
-          .select('id, content, role, created_at')
-          .eq('session_id', entry.sessionId)
-          .order('created_at', ascending: true);
-
-      messages = (rows as List).map((r) {
-        final content = r['content'] as String? ?? '';
-        final role = r['role'] as String? ?? 'user';
-        return _ChatMessage(
-          id: r['id'] as String,
-          content: content,
-          role: role,
-          createdAt: DateTime.parse(r['created_at'] as String),
-          tier: role == 'user' ? _detectTier(content) : 0,
-        );
-      }).toList();
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed to load chat: $e'),
-          backgroundColor: AppColors.error,
-        ));
-      }
-      return;
-    }
-
-    if (!context.mounted) return;
-    Navigator.pop(context); // Remove loader
-
-    if (isMobile) {
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => DraggableScrollableSheet(
-          initialChildSize: 0.92,
-          minChildSize: 0.5,
-          maxChildSize: 0.97,
-          builder: (_, ctrl) => _ChatViewSheet(
-            entry: entry,
-            messages: messages,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.92,
+        minChildSize: 0.5,
+        maxChildSize: 0.97,
+        builder: (bCtx, ctrl) => Container(
+          decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+          child: _CaseDetailPanel(
+            key: ValueKey(c.id),
+            c: _cases.firstWhere((e) => e.id == c.id, orElse: () => c),
+            allCases: _cases,
             scrollCtrl: ctrl,
+            onClose: () => Navigator.pop(bCtx),
+            onSetStatus: (s) { _setStatus(c.id, s); Navigator.pop(bCtx); },
+            onAddNote: (t) => _addNote(c.id, t),
+            onAssign: (a) => _assign(c.id, a),
+            onToggleFlag: () => _toggleFlag(c.id),
+            onEscalate: (t) { Navigator.pop(bCtx); _showEscalateDialog(c, t); },
+            onContact: () { Navigator.pop(bCtx); _showContactDialog(c); },
           ),
         ),
-      );
-    } else {
-      showDialog(
-        context: context,
-        builder: (_) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
-          child: SizedBox(
-            width: 600,
-            height: MediaQuery.sizeOf(context).height * 0.8,
-            child: _ChatViewSheet(entry: entry, messages: messages),
-          ),
-        ),
-      );
-    }
-  }
-
-  // ─── Crisis Detail Panel ──────────────────────────────
-
-  void _showCrisisDetail(BuildContext context, _CrisisEntry entry) {
-    final isMobile = MediaQuery.sizeOf(context).width < 700;
-    if (isMobile) {
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => DraggableScrollableSheet(
-          initialChildSize: 0.9,
-          minChildSize: 0.5,
-          maxChildSize: 0.97,
-          builder: (bCtx, ctrl) => _CrisisDetailSheet(
-            entry: entry,
-            scrollCtrl: ctrl,
-            onResolve: entry.resolved
-                ? null
-                : () {
-                    _markResolved(entry.messageId);
-                    Navigator.pop(bCtx);
-                  },
-            onContact: () => _showContactDialog(context, entry),
-            onViewChat: () => _showFullChatDialog(context, entry),
-            onEscalate: entry.resolved
-                ? null
-                : () => _showEscalateDialog(context, entry),
-            onAddNote: (txt) => _addNote(entry.messageId, txt),
-          ),
-        ),
-      );
-    } else {
-      showDialog(
-        context: context,
-        builder: (_) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
-          child: SizedBox(
-            width: 540,
-            height: MediaQuery.sizeOf(context).height * 0.85,
-            child: _CrisisDetailSheet(
-              entry: entry,
-              onResolve: entry.resolved
-                  ? null
-                  : () {
-                      _markResolved(entry.messageId);
-                      Navigator.pop(_);
-                    },
-              onContact: () => _showContactDialog(context, entry),
-              onViewChat: () => _showFullChatDialog(context, entry),
-              onEscalate: entry.resolved
-                  ? null
-                  : () => _showEscalateDialog(context, entry),
-              onAddNote: (txt) => _addNote(entry.messageId, txt),
-            ),
-          ),
-        ),
-      );
-    }
-  }
-
-  // ─── Add Note Dialog ──────────────────────────────────
-
-  void _showAddNoteDialog(BuildContext context, _CrisisEntry entry) {
-    final ctrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
-        title: Row(
-          children: [
-            const Icon(LucideIcons.notebookPen,
-                size: 18, color: AppColors.primary),
-            const SizedBox(width: 8),
-            const Text('Add Case Note'),
-          ],
-        ),
-        content: SizedBox(
-          width: 380,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Case: ${entry.userName} (Tier ${entry.tier})',
-                  style: const TextStyle(
-                      fontSize: 12, color: AppColors.textMuted)),
-              const SizedBox(height: 12),
-              TextField(
-                controller: ctrl,
-                maxLines: 4,
-                autofocus: true,
-                decoration: InputDecoration(
-                  hintText: 'Write your admin note here…',
-                  border: OutlineInputBorder(
-                      borderRadius: AppRadius.smAll),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: AppRadius.smAll,
-                    borderSide:
-                        const BorderSide(color: AppColors.primary),
-                  ),
-                  contentPadding: const EdgeInsets.all(12),
-                ),
-                style: const TextStyle(fontSize: 13),
-              ),
-              if (entry.notes.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text('Previous notes (${entry.notes.length}):',
-                    style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary)),
-                const SizedBox(height: 6),
-                ...entry.notes.take(3).map((n) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      borderRadius: AppRadius.smAll,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(n.text,
-                            style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textSecondary)),
-                        const SizedBox(height: 2),
-                        Text(
-                            '${n.adminName} · ${_relativeTime(n.createdAt)}',
-                            style: const TextStyle(
-                                fontSize: 10,
-                                color: AppColors.textMuted)),
-                      ],
-                    ),
-                  ),
-                )),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(_),
-              child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              if (ctrl.text.trim().isEmpty) return;
-              _addNote(entry.messageId, ctrl.text.trim());
-              Navigator.pop(_);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Note added'),
-                  backgroundColor: AppColors.success,
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white),
-            child: const Text('Save Note'),
-          ),
-        ],
       ),
     );
   }
 
-  // ─── User History Dialog ──────────────────────────────
-
-  Future<void> _showUserHistory(
-      BuildContext context, _CrisisEntry entry) async {
-    // Gather all flagged messages for this user across all lists
-    final all = [..._active, ..._resolved];
-    final userEntries = all
-        .where((e) => e.userId == entry.userId)
-        .toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
-        title: Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: AppColors.primaryContainer,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  entry.userName.isNotEmpty
-                      ? entry.userName[0].toUpperCase()
-                      : '?',
-                  style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('${entry.userName}\'s Crisis History',
-                      style: const TextStyle(fontSize: 15)),
-                  Text(entry.userEmail,
-                      style: const TextStyle(
-                          fontSize: 11, color: AppColors.textMuted)),
-                ],
-              ),
-            ),
-          ],
-        ),
-        content: SizedBox(
-          width: 480,
-          height: 400,
-          child: userEntries.isEmpty
-              ? const Center(child: Text('No history found'))
-              : ListView.separated(
-                  itemCount: userEntries.length,
-                  separatorBuilder: (_, __) =>
-                      const SizedBox(height: 8),
-                  itemBuilder: (_, i) {
-                    final e = userEntries[i];
-                    final col = e.tier == 3
-                        ? AppColors.error
-                        : e.tier == 2
-                            ? AppColors.warning
-                            : AppColors.info;
-                    return Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: e.resolved
-                            ? AppColors.surfaceVariant
-                            : col.withValues(alpha: 0.06),
-                        borderRadius: AppRadius.smAll,
-                        border: Border(
-                            left: BorderSide(color: col, width: 3)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              _TierBadgeSmall(tier: e.tier),
-                              const SizedBox(width: 6),
-                              if (e.resolved)
-                                const _TierBadgeSmall(
-                                    tier: -1, label: 'RESOLVED'),
-                              const Spacer(),
-                              Text(_relativeTime(e.createdAt),
-                                  style: const TextStyle(
-                                      fontSize: 10,
-                                      color: AppColors.textMuted)),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            e.content.length > 120
-                                ? '${e.content.substring(0, 120)}…'
-                                : e.content,
-                            style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textSecondary),
-                          ),
-                          if (e.notes.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text('${e.notes.length} admin note(s)',
-                                style: const TextStyle(
-                                    fontSize: 10,
-                                    color: AppColors.primary)),
-                          ],
-                        ],
-                      ),
-                    );
-                  },
-                ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(_),
-              child: const Text('Close')),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(_);
-              _showContactDialog(context, entry);
-            },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white),
-            child: const Text('Contact User'),
+  void _showTierFilter() => showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Filter by Tier', style: TextStyle(fontSize: 16)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(LucideIcons.x, size: 16, color: AppColors.textMuted),
+            title: const Text('All Tiers'),
+            selected: _filterTier == null,
+            onTap: () { setState(() => _filterTier = null); Navigator.pop(ctx); },
           ),
+          for (int t = 4; t >= 1; t--)
+            ListTile(
+              leading: Container(width: 12, height: 12, decoration: BoxDecoration(color: _tierColor(t), borderRadius: BorderRadius.circular(3))),
+              title: Text(_tierLabel(t)),
+              selected: _filterTier == t,
+              selectedColor: _tierColor(t),
+              onTap: () { setState(() => _filterTier = _filterTier == t ? null : t); Navigator.pop(ctx); },
+            ),
         ],
       ),
-    );
-  }
+    ),
+  );
 
-  // ─── Assign Dialog ────────────────────────────────────
+  void _showStatusFilter() => showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Filter by Status', style: TextStyle(fontSize: 16)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: _Status.values.map((s) => ListTile(
+          leading: Icon(s.icon, color: s.color, size: 16),
+          title: Text(s.label),
+          selected: _filterStatus == s,
+          onTap: () { setState(() => _filterStatus = _filterStatus == s ? null : s); Navigator.pop(ctx); },
+        )).toList(),
+      ),
+    ),
+  );
 
-  void _showAssignDialog(BuildContext context, _CrisisEntry entry) {
-    final admins = ['Admin', 'Dr. Sarah', 'Counselor Mike', 'Dr. Aisha'];
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
-        title: const Row(
-          children: [
-            Icon(LucideIcons.userCheck,
-                size: 18, color: AppColors.primary),
-            SizedBox(width: 8),
-            Text('Assign Case'),
-          ],
+  void _showEscalateDialog(_Case c, String target) => showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
+      title: Row(children: [
+        const Icon(LucideIcons.triangleAlert, color: AppColors.error, size: 18),
+        const SizedBox(width: 8),
+        Text('Escalate to $target', style: const TextStyle(fontSize: 15)),
+      ]),
+      content: Text('Mark ${c.userName}\'s case as escalated to $target and log the contact. Continue?'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        ElevatedButton(
+          onPressed: () {
+            _doEscalate(c.id, target);
+            Navigator.pop(ctx);
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Case escalated to $target'),
+              backgroundColor: const Color(0xFF7C3AED),
+            ));
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+          child: Text('Escalate to $target'),
         ),
-        content: SizedBox(
-          width: 320,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: admins
-                .map((a) => ListTile(
-                      title: Text(a,
-                          style: const TextStyle(fontSize: 14)),
-                      leading: CircleAvatar(
-                        radius: 16,
-                        backgroundColor:
-                            AppColors.primaryContainer,
-                        child: Text(a[0],
-                            style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.w700)),
-                      ),
-                      trailing: entry.assignedTo == a
-                          ? const Icon(LucideIcons.circleCheck,
-                              size: 16, color: AppColors.success)
-                          : null,
-                      onTap: () {
-                        _assignCase(entry.messageId, a);
-                        Navigator.pop(_);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content:
-                                Text('Case assigned to $a'),
-                            backgroundColor: AppColors.success,
-                          ),
-                        );
-                      },
-                      shape: RoundedRectangleBorder(
-                          borderRadius: AppRadius.smAll),
-                    ))
-                .toList(),
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(_),
-              child: const Text('Cancel')),
+      ],
+    ),
+  );
+
+  void _showContactDialog(_Case c) => showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
+      title: Row(children: [
+        const Icon(LucideIcons.phone, size: 16, color: AppColors.primary),
+        const SizedBox(width: 8),
+        Text('Contact ${c.userName}', style: const TextStyle(fontSize: 15)),
+      ]),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ContactOption(icon: LucideIcons.mail, title: 'Send Email', subtitle: c.userEmail, color: AppColors.primary, onTap: () {
+            setState(() => c.contacts.add(_ContactLog(method: 'email', note: 'Email sent to ${c.userEmail}', at: DateTime.now())));
+            Navigator.pop(ctx);
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Email contact logged')));
+          }),
+          _ContactOption(icon: LucideIcons.messageCircle, title: 'In-App Message', subtitle: 'Send through MindBridge', color: AppColors.info, onTap: () {
+            setState(() => c.contacts.add(_ContactLog(method: 'message', note: 'In-app message sent', at: DateTime.now())));
+            Navigator.pop(ctx);
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Message contact logged')));
+          }),
         ],
       ),
-    );
-  }
-
-  // ─── Quick Ban ────────────────────────────────────────
-
-  Future<void> _quickBan(
-      BuildContext context, _CrisisEntry entry) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: AppColors.errorContainer,
-                borderRadius: AppRadius.xsAll,
-              ),
-              child: const Icon(LucideIcons.ban,
-                  size: 16, color: AppColors.error),
-            ),
-            const SizedBox(width: 8),
-            const Text('Ban User'),
-          ],
-        ),
-        content: Text(
-          'Ban ${entry.userName} (${entry.userEmail})?\n\nThis will prevent them from logging in. You can reverse this from User Management.',
-          style: const TextStyle(fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(_, false),
-              child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(_, true),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.error,
-                foregroundColor: Colors.white),
-            child: const Text('Ban User'),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true || !context.mounted) return;
-
-    final ok = await ref
-        .read(adminProvider.notifier)
-        .banUser(entry.userId, 'Crisis monitor — admin ban');
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-            ok ? '${entry.userName} banned' : 'Failed to ban user'),
-        backgroundColor: ok ? AppColors.warning : AppColors.error,
-      ));
-    }
-  }
-
-  // ─── Contact Dialog ───────────────────────────────────
-
-  void _showContactDialog(BuildContext context, _CrisisEntry entry) {
-    final subjectCtrl = TextEditingController(
-        text: 'We noticed you might be going through a tough time');
-    final msgCtrl = TextEditingController(
-      text: 'Hi ${entry.userName},\n\nWe noticed from your recent '
-          'activity that you might be struggling. We\'re here to help '
-          'and want you to know you\'re not alone.\n\nPlease reach out '
-          'to our support team or a local crisis resource. Your '
-          'wellbeing matters to us.\n\nWith care,\nMindBridge Team',
-    );
-
-    showDialog(
-      context: context,
-      builder: (dCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
-        title: Row(
-          children: [
-            const Icon(LucideIcons.mail,
-                size: 18, color: AppColors.primary),
-            const SizedBox(width: 8),
-            const Text('Contact User'),
-          ],
-        ),
-        content: SizedBox(
-          width: 420,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // User info strip
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
-                    borderRadius: AppRadius.smAll,
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 18,
-                        backgroundColor: AppColors.primaryContainer,
-                        child: Text(
-                          entry.userName.isNotEmpty
-                              ? entry.userName[0].toUpperCase()
-                              : '?',
-                          style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.primary),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(entry.userName,
-                                style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600)),
-                            Row(
-                              children: [
-                                const Icon(LucideIcons.mail,
-                                    size: 10,
-                                    color: AppColors.textMuted),
-                                const SizedBox(width: 3),
-                                Text(entry.userEmail,
-                                    style: const TextStyle(
-                                        fontSize: 11,
-                                        color: AppColors.textMuted)),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Copy email
-                      IconButton(
-                        onPressed: () {
-                          Clipboard.setData(
-                              ClipboardData(text: entry.userEmail));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Email copied'),
-                                duration: Duration(seconds: 1)),
-                          );
-                        },
-                        icon: const Icon(LucideIcons.copy,
-                            size: 14, color: AppColors.textMuted),
-                        tooltip: 'Copy email',
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: subjectCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'Subject',
-                    border: OutlineInputBorder(
-                        borderRadius: AppRadius.smAll),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: AppRadius.smAll,
-                      borderSide:
-                          const BorderSide(color: AppColors.primary),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                  ),
-                  style: const TextStyle(fontSize: 13),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: msgCtrl,
-                  maxLines: 6,
-                  decoration: InputDecoration(
-                    labelText: 'Message',
-                    alignLabelWithHint: true,
-                    border: OutlineInputBorder(
-                        borderRadius: AppRadius.smAll),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: AppRadius.smAll,
-                      borderSide:
-                          const BorderSide(color: AppColors.primary),
-                    ),
-                    contentPadding: const EdgeInsets.all(12),
-                  ),
-                  style: const TextStyle(fontSize: 13),
-                ),
-                const SizedBox(height: 12),
-                // Crisis resources
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.warningContainer,
-                    borderRadius: AppRadius.smAll,
-                    border: Border.all(
-                        color: AppColors.warning.withValues(alpha: 0.3)),
-                  ),
-                  child: const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(LucideIcons.phone,
-                              size: 12, color: AppColors.warning),
-                          SizedBox(width: 4),
-                          Text(
-                            'Crisis Resources (Kenya)',
-                            style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.warning),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 6),
-                      Text(
-                        '• Befrienders Kenya: +254 722 178 177\n'
-                        '• Niskize: 0800 723 253\n'
-                        '• Red Cross: +254 703 037 000',
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary,
-                            height: 1.5),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dCtx),
-              child: const Text('Cancel')),
-          // Mailto fallback
-          OutlinedButton.icon(
-            onPressed: () {
-              final mailto =
-                  'mailto:${entry.userEmail}?subject=${Uri.encodeComponent(subjectCtrl.text)}&body=${Uri.encodeComponent(msgCtrl.text)}';
-              // Copy the mailto link to clipboard as fallback
-              Clipboard.setData(ClipboardData(text: mailto));
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                      'Email template copied — paste in your email client'),
-                  backgroundColor: AppColors.info,
-                  duration: Duration(seconds: 3),
-                ),
-              );
-            },
-            icon: const Icon(LucideIcons.copy, size: 13),
-            label: const Text('Copy Template'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(dCtx);
-              final success = await ref
-                  .read(adminProvider.notifier)
-                  .emailUser(
-                    toEmail: entry.userEmail,
-                    toName: entry.userName,
-                    subject: subjectCtrl.text,
-                    message: msgCtrl.text,
-                    fromAdminName: 'MindBridge Admin',
-                  );
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(success
-                      ? 'Email sent to ${entry.userName}'
-                      : 'Backend offline — use "Copy Template" to send manually'),
-                  backgroundColor:
-                      success ? AppColors.success : AppColors.warning,
-                  duration: const Duration(seconds: 4),
-                ));
-              }
-            },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white),
-            child: const Text('Send via Backend'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── Escalate Dialog ──────────────────────────────────
-
-  void _showEscalateDialog(BuildContext context, _CrisisEntry entry) {
-    final notesCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (dCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: AppColors.errorContainer,
-                borderRadius: AppRadius.xsAll,
-              ),
-              child: const Icon(LucideIcons.triangleAlert,
-                  size: 16, color: AppColors.error),
-            ),
-            const SizedBox(width: 8),
-            const Text('Escalate Case'),
-          ],
-        ),
-        content: SizedBox(
-          width: 400,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('User: ${entry.userName} (${entry.userEmail})',
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600)),
-              if (entry.university != null) ...[
-                const SizedBox(height: 4),
-                Text('University: ${entry.university}',
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textMuted)),
-              ],
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesCtrl,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  labelText: 'Escalation notes (optional)',
-                  alignLabelWithHint: true,
-                  border:
-                      OutlineInputBorder(borderRadius: AppRadius.smAll),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: AppRadius.smAll,
-                    borderSide:
-                        const BorderSide(color: AppColors.error),
-                  ),
-                  contentPadding: const EdgeInsets.all(12),
-                ),
-                style: const TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppColors.errorContainer,
-                  borderRadius: AppRadius.smAll,
-                  border: Border.all(
-                      color: AppColors.error.withValues(alpha: 0.3)),
-                ),
-                child: const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Emergency Escalation Protocol',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.error),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      '1. Contact the university counseling center directly\n'
-                      '2. Reach out to the student\'s emergency contact if available\n'
-                      '3. If immediate danger, contact emergency services\n'
-                      '4. Document all actions in the case notes',
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                          height: 1.5),
-                    ),
-                    SizedBox(height: 10),
-                    Text(
-                      'Emergency: 999 (Kenya) / 112',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.error),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dCtx),
-              child: const Text('Close')),
-          ElevatedButton(
-            onPressed: () {
-              final notes = notesCtrl.text.trim();
-              if (notes.isNotEmpty) {
-                _addNote(entry.messageId, 'ESCALATED: $notes');
-              } else {
-                _addNote(entry.messageId,
-                    'ESCALATED — protocol initiated at ${DateFormat('MMM d, y HH:mm').format(DateTime.now())}');
-              }
-              Navigator.pop(dCtx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content:
-                      Text('Escalation logged. Follow protocol above.'),
-                  backgroundColor: AppColors.warning,
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.error,
-                foregroundColor: Colors.white),
-            child: const Text('Log Escalation'),
-          ),
-        ],
-      ),
-    );
-  }
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel'))],
+    ),
+  );
 }
 
-// ─── Chat View Sheet ──────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Hero Header
+// ─────────────────────────────────────────────────────────────────────────────
 
-class _ChatViewSheet extends StatelessWidget {
-  final _CrisisEntry entry;
-  final List<_ChatMessage> messages;
-  final ScrollController? scrollCtrl;
+class _HeroHeader extends StatelessWidget {
+  final int newCount, activeCount, doneCount, overdueCount, criticalCount, newAlerts;
+  final bool liveMode, hasCritical;
+  final VoidCallback onToggleLive, onRefresh;
 
-  const _ChatViewSheet({
-    required this.entry,
-    required this.messages,
-    this.scrollCtrl,
+  const _HeroHeader({
+    required this.newCount, required this.activeCount, required this.doneCount,
+    required this.overdueCount, required this.criticalCount, required this.newAlerts,
+    required this.liveMode, required this.hasCritical,
+    required this.onToggleLive, required this.onRefresh,
   });
 
   @override
   Widget build(BuildContext context) {
+    final grad = hasCritical
+      ? [const Color(0xFF7F1D1D), const Color(0xFFB91C1C)]
+      : [const Color(0xFF0D5C57), AppColors.primary];
+
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: scrollCtrl != null
-            ? const BorderRadius.vertical(top: Radius.circular(20))
-            : AppRadius.lgAll,
-      ),
-      child: Column(
+      decoration: BoxDecoration(gradient: LinearGradient(colors: grad, begin: Alignment.topLeft, end: Alignment.bottomRight)),
+      padding: const EdgeInsets.fromLTRB(18, 14, 14, 14),
+      child: Row(
         children: [
-          // Handle
-          if (scrollCtrl != null)
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          // Header
           Container(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.border)),
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: AppColors.primaryContainer,
-                  child: Text(
-                    entry.userName.isNotEmpty
-                        ? entry.userName[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primary),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('${entry.userName}\'s Chat Session',
-                          style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700)),
-                      Text(
-                        '${messages.length} messages · ${entry.userEmail}',
-                        style: const TextStyle(
-                            fontSize: 11, color: AppColors.textMuted),
-                      ),
-                    ],
-                  ),
-                ),
-                // Flagged count badge
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: AppRadius.mdAll),
+            child: Icon(hasCritical ? LucideIcons.triangleAlert : LucideIcons.shieldCheck, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Crisis Monitor', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
+              Text(
+                hasCritical
+                  ? '$criticalCount critical — immediate attention required'
+                  : 'Real-time student crisis management',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 11),
+              ),
+            ]),
+          ),
+          const SizedBox(width: 10),
+          Wrap(spacing: 6, children: [
+            _HChip(label: '$newCount',     sub: 'New',     color: newCount > 0 ? AppColors.error : Colors.white54),
+            _HChip(label: '$activeCount',  sub: 'Active',  color: activeCount > 0 ? AppColors.warning : Colors.white54),
+            _HChip(label: '$overdueCount', sub: 'Overdue', color: overdueCount > 0 ? const Color(0xFFFCA5A5) : Colors.white54),
+            _HChip(label: '$doneCount',    sub: 'Done',    color: Colors.white54),
+          ]),
+          const SizedBox(width: 8),
+          // Live toggle
+          GestureDetector(
+            onTap: onToggleLive,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: liveMode ? 0.2 : 0.08),
+                borderRadius: AppRadius.pillAll,
+                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.errorContainer,
-                    borderRadius: AppRadius.pillAll,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(LucideIcons.flag,
-                          size: 11, color: AppColors.error),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${messages.where((m) => m.tier > 0).length} flagged',
-                        style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.error,
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
+                  width: 7, height: 7,
+                  decoration: BoxDecoration(color: liveMode ? const Color(0xFF4ADE80) : Colors.white38, shape: BoxShape.circle),
                 ),
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(LucideIcons.x,
-                      size: 18, color: AppColors.textMuted),
-                  style: IconButton.styleFrom(padding: EdgeInsets.zero),
-                ),
-              ],
+                const SizedBox(width: 5),
+                const Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+              ]),
             ),
           ),
-          // Messages
-          Expanded(
-            child: messages.isEmpty
-                ? const Center(
-                    child: Text('No messages found',
-                        style: TextStyle(color: AppColors.textMuted)))
-                : ListView.builder(
-                    controller: scrollCtrl,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: messages.length,
-                    itemBuilder: (_, i) {
-                      final m = messages[i];
-                      final isUser = m.role == 'user';
-                      final isFlagged = m.tier > 0;
-                      final flagColor = m.tier == 3
-                          ? AppColors.error
-                          : m.tier == 2
-                              ? AppColors.warning
-                              : AppColors.info;
+          const SizedBox(width: 4),
+          IconButton(onPressed: onRefresh, icon: const Icon(LucideIcons.refreshCw, color: Colors.white, size: 16), tooltip: 'Refresh'),
+          if (newAlerts > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.25), borderRadius: AppRadius.pillAll),
+              child: Text('$newAlerts new', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+            ),
+        ],
+      ),
+    );
+  }
+}
 
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Column(
-                          crossAxisAlignment: isUser
-                              ? CrossAxisAlignment.end
-                              : CrossAxisAlignment.start,
-                          children: [
-                            // Role label
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                  bottom: 3, left: 4, right: 4),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    isUser ? entry.userName : 'Maya AI',
-                                    style: const TextStyle(
-                                        fontSize: 10,
-                                        color: AppColors.textMuted,
-                                        fontWeight: FontWeight.w600),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    _relativeTime(m.createdAt),
-                                    style: const TextStyle(
-                                        fontSize: 10,
-                                        color: AppColors.textMuted),
-                                  ),
-                                  if (isFlagged) ...[
-                                    const SizedBox(width: 4),
-                                    Icon(LucideIcons.flag,
-                                        size: 10, color: flagColor),
-                                  ],
-                                ],
-                              ),
-                            ),
-                            Container(
-                              constraints: const BoxConstraints(
-                                  maxWidth: 400),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: isFlagged
-                                    ? flagColor.withValues(alpha: 0.08)
-                                    : isUser
-                                        ? AppColors.primaryContainer
-                                        : AppColors.surfaceVariant,
-                                borderRadius: AppRadius.mdAll,
-                                border: isFlagged
-                                    ? Border.all(
-                                        color: flagColor
-                                            .withValues(alpha: 0.4))
-                                    : null,
-                              ),
-                              child: isFlagged
-                                  ? _HighlightedText(
-                                      text: m.content,
-                                      highlightColor: flagColor,
-                                    )
-                                  : Text(
-                                      m.content,
-                                      style: const TextStyle(
-                                          fontSize: 13,
-                                          color: AppColors.textSecondary,
-                                          height: 1.4),
-                                    ),
-                            ),
-                          ],
+class _HChip extends StatelessWidget {
+  final String label, sub;
+  final Color color;
+  const _HChip({required this.label, required this.sub, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: AppRadius.mdAll),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Text(label, style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.w800)),
+      Text(sub, style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 9)),
+    ]),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Control Bar
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ControlBar extends StatelessWidget {
+  final TextEditingController searchCtrl;
+  final String search;
+  final int? filterTier;
+  final _Status? filterStatus;
+  final bool unassignedOnly;
+  final void Function(String) onSearch;
+  final VoidCallback onTierFilter, onStatusFilter, onToggleUnassigned, onClearFilters;
+
+  const _ControlBar({
+    required this.searchCtrl, required this.search, required this.filterTier,
+    required this.filterStatus, required this.unassignedOnly, required this.onSearch,
+    required this.onTierFilter, required this.onStatusFilter,
+    required this.onToggleUnassigned, required this.onClearFilters,
+  });
+
+  bool get _hasFilters => filterTier != null || filterStatus != null || unassignedOnly;
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = <Widget>[
+      _FChip(
+        label: filterTier != null ? _tierLabel(filterTier!) : 'Tier',
+        selected: filterTier != null,
+        color: filterTier != null ? _tierColor(filterTier!) : null,
+        onTap: onTierFilter,
+      ),
+      _FChip(
+        label: filterStatus != null ? filterStatus!.label : 'Status',
+        selected: filterStatus != null,
+        color: filterStatus?.color,
+        onTap: onStatusFilter,
+      ),
+      _FChip(
+        label: 'Unassigned',
+        selected: unassignedOnly,
+        onTap: onToggleUnassigned,
+      ),
+      if (_hasFilters)
+        GestureDetector(
+          onTap: onClearFilters,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.error.withValues(alpha: 0.08),
+              borderRadius: AppRadius.pillAll,
+            ),
+            child: const Text('Clear', style: TextStyle(fontSize: 11, color: AppColors.error, fontWeight: FontWeight.w600)),
+          ),
+        ),
+    ];
+
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Row(
+        children: [
+          // Search
+          SizedBox(
+            width: 240,
+            height: 36,
+            child: TextField(
+              controller: searchCtrl,
+              onChanged: onSearch,
+              style: const TextStyle(fontSize: 12),
+              decoration: InputDecoration(
+                hintText: 'Search name, email, message…',
+                hintStyle: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                prefixIcon: const Icon(LucideIcons.search, size: 14, color: AppColors.textMuted),
+                suffixIcon: search.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(LucideIcons.x, size: 12, color: AppColors.textMuted),
+                      onPressed: () { searchCtrl.clear(); onSearch(''); },
+                    )
+                  : null,
+                filled: true,
+                fillColor: AppColors.surfaceVariant,
+                border: OutlineInputBorder(borderRadius: AppRadius.pillAll, borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              for (final c in chips) Padding(padding: const EdgeInsets.only(right: 6), child: c),
+            ]),
+          )),
+        ],
+      ),
+    );
+  }
+}
+
+class _FChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final Color? color;
+  final VoidCallback onTap;
+  const _FChip({required this.label, required this.selected, this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? AppColors.primary;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected ? c.withValues(alpha: 0.1) : AppColors.surfaceVariant,
+          borderRadius: AppRadius.pillAll,
+          border: Border.all(color: selected ? c.withValues(alpha: 0.35) : AppColors.border),
+        ),
+        child: Text(label, style: TextStyle(
+          fontSize: 11,
+          color: selected ? c : AppColors.textSecondary,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+        )),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bulk Bar
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _BulkBar extends StatelessWidget {
+  final int count;
+  final VoidCallback onAck, onResolve, onClear;
+  const _BulkBar({required this.count, required this.onAck, required this.onResolve, required this.onClear});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    color: AppColors.primary.withValues(alpha: 0.07),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    child: Row(children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(color: AppColors.primary, borderRadius: AppRadius.pillAll),
+        child: Text('$count selected', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+      ),
+      const Spacer(),
+      _SolidBtn(label: 'Acknowledge All', icon: LucideIcons.eye, color: AppColors.warning, onTap: onAck),
+      const SizedBox(width: 8),
+      _SolidBtn(label: 'Resolve All', icon: LucideIcons.circleCheck, color: AppColors.success, onTap: onResolve),
+      const SizedBox(width: 8),
+      TextButton(onPressed: onClear, child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted, fontSize: 12))),
+    ]),
+  );
+}
+
+class _SolidBtn extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  const _SolidBtn({required this.label, required this.icon, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: AppRadius.pillAll,
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 13, color: color),
+        const SizedBox(width: 5),
+        Text(label, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
+      ]),
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Kanban View (Desktop)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _KanbanView extends StatelessWidget {
+  final List<_Case> newCases, activeCases, doneCases;
+  final _Case? detail;
+  final Set<String> selectedIds;
+  final List<_Case> allCases;
+  final void Function(_Case) onTap, onToggleSelect;
+  final void Function(String, _Status) onSetStatus;
+  final void Function(String, String) onAddNote;
+  final void Function(String, String?) onAssign;
+  final void Function(String) onToggleFlag;
+  final void Function(_Case, String) onEscalate;
+  final void Function(_Case) onContact;
+  final VoidCallback onCloseDetail;
+
+  const _KanbanView({
+    required this.newCases, required this.activeCases, required this.doneCases,
+    required this.detail, required this.selectedIds, required this.allCases,
+    required this.onTap, required this.onToggleSelect, required this.onSetStatus,
+    required this.onAddNote, required this.onAssign, required this.onToggleFlag,
+    required this.onEscalate, required this.onContact, required this.onCloseDetail,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _KanbanCol(
+          title: 'New Cases', icon: LucideIcons.circleAlert, color: AppColors.error,
+          cases: newCases, detail: detail, selectedIds: selectedIds,
+          onTap: onTap, onToggleSelect: onToggleSelect, onSetStatus: onSetStatus,
+        ),
+        const VerticalDivider(width: 1, color: AppColors.border),
+        _KanbanCol(
+          title: 'Active', icon: LucideIcons.clock, color: AppColors.warning,
+          cases: activeCases, detail: detail, selectedIds: selectedIds,
+          onTap: onTap, onToggleSelect: onToggleSelect, onSetStatus: onSetStatus,
+        ),
+        const VerticalDivider(width: 1, color: AppColors.border),
+        _KanbanCol(
+          title: 'Resolved', icon: LucideIcons.circleCheck, color: AppColors.success,
+          cases: doneCases, detail: detail, selectedIds: selectedIds,
+          onTap: onTap, onToggleSelect: onToggleSelect, onSetStatus: onSetStatus,
+        ),
+        if (detail != null) ...[
+          const VerticalDivider(width: 1, color: AppColors.border),
+          SizedBox(
+            width: 360,
+            child: _CaseDetailPanel(
+              key: ValueKey(detail!.id),
+              c: detail!,
+              allCases: allCases,
+              onClose: onCloseDetail,
+              onSetStatus: (s) => onSetStatus(detail!.id, s),
+              onAddNote: (t) => onAddNote(detail!.id, t),
+              onAssign: (a) => onAssign(detail!.id, a),
+              onToggleFlag: () => onToggleFlag(detail!.id),
+              onEscalate: (t) => onEscalate(detail!, t),
+              onContact: () => onContact(detail!),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Kanban Column — uses SingleChildScrollView > Column (ALWAYS renders cards)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _KanbanCol extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Color color;
+  final List<_Case> cases;
+  final _Case? detail;
+  final Set<String> selectedIds;
+  final void Function(_Case) onTap, onToggleSelect;
+  final void Function(String, _Status) onSetStatus;
+
+  const _KanbanCol({
+    required this.title, required this.icon, required this.color,
+    required this.cases, required this.detail, required this.selectedIds,
+    required this.onTap, required this.onToggleSelect, required this.onSetStatus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Column header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.06),
+              border: Border(bottom: BorderSide(color: color.withValues(alpha: 0.2))),
+            ),
+            child: Row(children: [
+              Container(
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: AppRadius.smAll),
+                child: Icon(icon, size: 12, color: color),
+              ),
+              const SizedBox(width: 8),
+              Text(title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: AppRadius.pillAll),
+                child: Text('${cases.length}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color)),
+              ),
+            ]),
+          ),
+          // Cards — SingleChildScrollView renders ALL children eagerly = always visible
+          Flexible(
+            child: cases.isEmpty
+              ? Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(icon, size: 32, color: AppColors.border),
+                    const SizedBox(height: 8),
+                    Text('No $title', style: const TextStyle(fontSize: 13, color: AppColors.textMuted)),
+                  ]),
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(10),
+                  child: Column(
+                    children: [
+                      for (final c in cases)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _CrisisCard(
+                            key: ValueKey(c.id),
+                            c: c,
+                            isSelected: detail?.id == c.id,
+                            isChecked: selectedIds.contains(c.id),
+                            onTap: () => onTap(c),
+                            onLongPress: () => onToggleSelect(c),
+                            onSetStatus: onSetStatus,
+                          ),
                         ),
-                      );
-                    },
+                    ],
                   ),
+                ),
           ),
         ],
       ),
@@ -1687,1502 +1102,792 @@ class _ChatViewSheet extends StatelessWidget {
   }
 }
 
-// ─── Crisis Detail Sheet ──────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Crisis Card — plain Container, zero animations, always fully visible
+// ─────────────────────────────────────────────────────────────────────────────
 
-class _CrisisDetailSheet extends StatefulWidget {
-  final _CrisisEntry entry;
-  final ScrollController? scrollCtrl;
-  final VoidCallback? onResolve;
-  final VoidCallback onContact;
-  final VoidCallback onViewChat;
-  final VoidCallback? onEscalate;
-  final void Function(String) onAddNote;
+class _CrisisCard extends StatelessWidget {
+  final _Case c;
+  final bool isSelected;
+  final bool isChecked;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+  final void Function(String, _Status) onSetStatus;
 
-  const _CrisisDetailSheet({
-    required this.entry,
-    this.scrollCtrl,
-    this.onResolve,
-    required this.onContact,
-    required this.onViewChat,
-    this.onEscalate,
-    required this.onAddNote,
+  const _CrisisCard({
+    super.key,
+    required this.c,
+    required this.isSelected,
+    required this.isChecked,
+    required this.onTap,
+    this.onLongPress,
+    required this.onSetStatus,
   });
 
   @override
-  State<_CrisisDetailSheet> createState() => _CrisisDetailSheetState();
+  Widget build(BuildContext context) {
+    final tc = _tierColor(c.tier);
+    final slaTxt = c.isActive ? _slaText(c.age, c.tier) : null;
+    final slaClr = c.isActive ? _slaColor(c.age, c.tier) : null;
+
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isChecked
+            ? AppColors.primary.withValues(alpha: 0.05)
+            : isSelected
+              ? tc.withValues(alpha: 0.04)
+              : Colors.white,
+          borderRadius: AppRadius.lgAll,
+          border: Border(
+            left: BorderSide(color: tc, width: 4),
+            top: BorderSide(color: isSelected ? tc.withValues(alpha: 0.2) : AppColors.border),
+            right: BorderSide(color: isSelected ? tc.withValues(alpha: 0.2) : AppColors.border),
+            bottom: BorderSide(color: isSelected ? tc.withValues(alpha: 0.2) : AppColors.border),
+          ),
+        ),
+        padding: const EdgeInsets.all(11),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Row 1: badges + risk + SLA
+            Row(children: [
+              _TierPill(tier: c.tier),
+              const SizedBox(width: 5),
+              _StatusPill(status: c.status),
+              if (c.flagged) ...[
+                const SizedBox(width: 5),
+                const Icon(LucideIcons.flag, size: 11, color: AppColors.error),
+              ],
+              const Spacer(),
+              // Risk score
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _riskColor(c.riskScore).withValues(alpha: 0.12),
+                  borderRadius: AppRadius.smAll,
+                ),
+                child: Text('${c.riskScore.toInt()}',
+                    style: TextStyle(fontSize: 9, color: _riskColor(c.riskScore), fontWeight: FontWeight.w800)),
+              ),
+              if (slaTxt != null) ...[
+                const SizedBox(width: 5),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: slaClr!.withValues(alpha: 0.12),
+                    borderRadius: AppRadius.smAll,
+                  ),
+                  child: Text(slaTxt, style: TextStyle(fontSize: 9, color: slaClr, fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ]),
+            const SizedBox(height: 7),
+
+            // Row 2: Avatar + name + time
+            Row(children: [
+              _Avatar(name: c.userName, color: tc, radius: 13),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(c.userName,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    c.university != null ? '${c.userEmail} · ${c.university}' : c.userEmail,
+                    style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ]),
+              ),
+              Text(_relTime(c.createdAt), style: const TextStyle(fontSize: 9, color: AppColors.textMuted)),
+            ]),
+            const SizedBox(height: 7),
+
+            // Row 3: Message preview
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: tc.withValues(alpha: 0.04),
+                borderRadius: AppRadius.smAll,
+                border: Border.all(color: tc.withValues(alpha: 0.1)),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                if (c.categories.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Wrap(spacing: 4, children: c.categories.take(2).map((cat) =>
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(color: tc.withValues(alpha: 0.12), borderRadius: AppRadius.xsAll),
+                        child: Text(cat, style: TextStyle(fontSize: 8, color: tc, fontWeight: FontWeight.w700)),
+                      )).toList(),
+                    ),
+                  ),
+                Text(
+                  c.content.length > 90 ? '${c.content.substring(0, 90)}…' : c.content,
+                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.4),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ]),
+            ),
+            const SizedBox(height: 7),
+
+            // Row 4: metadata + quick actions
+            Row(children: [
+              if (c.assignedTo != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                    borderRadius: AppRadius.pillAll,
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(LucideIcons.userCheck, size: 9, color: AppColors.primary),
+                    const SizedBox(width: 3),
+                    Text(c.assignedTo!, style: const TextStyle(fontSize: 9, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                  ]),
+                ),
+              if (c.notes.isNotEmpty) ...[
+                const SizedBox(width: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: AppRadius.smAll),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(LucideIcons.messageSquare, size: 9, color: AppColors.textMuted),
+                    const SizedBox(width: 2),
+                    Text('${c.notes.length}', style: const TextStyle(fontSize: 9, color: AppColors.textMuted)),
+                  ]),
+                ),
+              ],
+              const Spacer(),
+              ..._buildQuickActions(c),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildQuickActions(_Case c) {
+    final actions = <({IconData icon, String label, Color color, _Status next})>[];
+    switch (c.status) {
+      case _Status.newCase:
+        actions.add((icon: LucideIcons.eye, label: 'Ack', color: AppColors.warning, next: _Status.acknowledged));
+        actions.add((icon: LucideIcons.circleCheck, label: 'Resolve', color: AppColors.success, next: _Status.resolved));
+      case _Status.acknowledged:
+        actions.add((icon: LucideIcons.clock, label: 'Start', color: AppColors.info, next: _Status.inProgress));
+        actions.add((icon: LucideIcons.circleCheck, label: 'Resolve', color: AppColors.success, next: _Status.resolved));
+      case _Status.inProgress:
+      case _Status.escalated:
+        actions.add((icon: LucideIcons.circleCheck, label: 'Resolve', color: AppColors.success, next: _Status.resolved));
+      case _Status.resolved:
+        actions.add((icon: LucideIcons.rotateCcw, label: 'Re-open', color: AppColors.warning, next: _Status.newCase));
+        actions.add((icon: LucideIcons.archive, label: 'Close', color: AppColors.textMuted, next: _Status.closed));
+      case _Status.closed:
+        actions.add((icon: LucideIcons.rotateCcw, label: 'Re-open', color: AppColors.warning, next: _Status.newCase));
+    }
+    return actions.map((a) => Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: GestureDetector(
+        onTap: () => onSetStatus(c.id, a.next),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: a.color.withValues(alpha: 0.1),
+            borderRadius: AppRadius.smAll,
+            border: Border.all(color: a.color.withValues(alpha: 0.25)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(a.icon, size: 10, color: a.color),
+            const SizedBox(width: 4),
+            Text(a.label, style: TextStyle(fontSize: 10, color: a.color, fontWeight: FontWeight.w600)),
+          ]),
+        ),
+      ),
+    )).toList();
+  }
 }
 
-class _CrisisDetailSheetState extends State<_CrisisDetailSheet> {
+// ─────────────────────────────────────────────────────────────────────────────
+// Mobile Tabs View
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _TabsView extends StatelessWidget {
+  final TabController tabs;
+  final List<_Case> newCases, activeCases, doneCases;
+  final Set<String> selectedIds;
+  final void Function(_Case) onTap, onLongPress;
+  final void Function(String, _Status) onSetStatus;
+
+  const _TabsView({
+    required this.tabs, required this.newCases, required this.activeCases,
+    required this.doneCases, required this.selectedIds,
+    required this.onTap, required this.onLongPress, required this.onSetStatus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      TabBar(
+        controller: tabs,
+        labelColor: AppColors.primary,
+        unselectedLabelColor: AppColors.textMuted,
+        indicatorColor: AppColors.primary,
+        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+        tabs: [
+          Tab(text: 'New (${newCases.length})'),
+          Tab(text: 'Active (${activeCases.length})'),
+          Tab(text: 'Done (${doneCases.length})'),
+        ],
+      ),
+      const Divider(height: 1, color: AppColors.border),
+      Expanded(
+        child: TabBarView(
+          controller: tabs,
+          children: [
+            _MobileList(cases: newCases, selectedIds: selectedIds, onTap: onTap, onLongPress: onLongPress, onSetStatus: onSetStatus, emptyIcon: LucideIcons.shieldCheck, emptyText: 'No new cases'),
+            _MobileList(cases: activeCases, selectedIds: selectedIds, onTap: onTap, onLongPress: onLongPress, onSetStatus: onSetStatus, emptyIcon: LucideIcons.clock, emptyText: 'No active cases'),
+            _MobileList(cases: doneCases, selectedIds: selectedIds, onTap: onTap, onLongPress: onLongPress, onSetStatus: onSetStatus, emptyIcon: LucideIcons.circleCheck, emptyText: 'No resolved cases'),
+          ],
+        ),
+      ),
+    ]);
+  }
+}
+
+class _MobileList extends StatelessWidget {
+  final List<_Case> cases;
+  final Set<String> selectedIds;
+  final void Function(_Case) onTap, onLongPress;
+  final void Function(String, _Status) onSetStatus;
+  final IconData emptyIcon;
+  final String emptyText;
+
+  const _MobileList({
+    required this.cases, required this.selectedIds, required this.onTap,
+    required this.onLongPress, required this.onSetStatus,
+    required this.emptyIcon, required this.emptyText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (cases.isEmpty) return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Icon(emptyIcon, size: 40, color: AppColors.border),
+      const SizedBox(height: 8),
+      Text(emptyText, style: const TextStyle(color: AppColors.textMuted)),
+    ]));
+
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        for (final c in cases)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _CrisisCard(
+              key: ValueKey(c.id),
+              c: c,
+              isSelected: false,
+              isChecked: selectedIds.contains(c.id),
+              onTap: () => onTap(c),
+              onLongPress: () => onLongPress(c),
+              onSetStatus: onSetStatus,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Case Detail Panel
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CaseDetailPanel extends StatefulWidget {
+  final _Case c;
+  final List<_Case> allCases;
+  final ScrollController? scrollCtrl;
+  final VoidCallback onClose;
+  final void Function(_Status) onSetStatus;
+  final void Function(String) onAddNote;
+  final void Function(String?) onAssign;
+  final VoidCallback onToggleFlag;
+  final void Function(String) onEscalate;
+  final VoidCallback onContact;
+
+  const _CaseDetailPanel({
+    super.key,
+    required this.c, required this.allCases, this.scrollCtrl,
+    required this.onClose, required this.onSetStatus, required this.onAddNote,
+    required this.onAssign, required this.onToggleFlag,
+    required this.onEscalate, required this.onContact,
+  });
+
+  @override
+  State<_CaseDetailPanel> createState() => _CaseDetailPanelState();
+}
+
+class _CaseDetailPanelState extends State<_CaseDetailPanel> {
   final _noteCtrl = TextEditingController();
 
   @override
-  void dispose() {
-    _noteCtrl.dispose();
-    super.dispose();
-  }
-
-  Color get _tc => widget.entry.tier == 3
-      ? AppColors.error
-      : widget.entry.tier == 2
-          ? AppColors.warning
-          : AppColors.info;
-
-  String get _tl => widget.entry.tier == 3
-      ? 'CRITICAL'
-      : widget.entry.tier == 2
-          ? 'HIGH RISK'
-          : 'MODERATE';
+  void dispose() { _noteCtrl.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
-    final e = widget.entry;
+    final c = widget.c;
+    final tc = _tierColor(c.tier);
+    final history = widget.allCases.where((e) => e.userId == c.userId && e.id != c.id).toList();
+
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: widget.scrollCtrl != null
-            ? const BorderRadius.vertical(top: Radius.circular(20))
-            : AppRadius.lgAll,
-      ),
+      color: Colors.white,
       child: Column(
         children: [
-          if (widget.scrollCtrl != null)
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(2)),
-            ),
-          // Header
+          // Panel header
           Container(
-            padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+            padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
             decoration: BoxDecoration(
-              color: _tc.withValues(alpha: 0.04),
-              border: Border(
-                bottom: const BorderSide(color: AppColors.border),
-                left: BorderSide(color: _tc, width: 4),
+              color: tc.withValues(alpha: 0.06),
+              border: Border(bottom: BorderSide(color: tc.withValues(alpha: 0.2))),
+            ),
+            child: Row(children: [
+              _TierPill(tier: c.tier),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(c.userName,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    overflow: TextOverflow.ellipsis),
               ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _tc.withValues(alpha: 0.12),
-                    borderRadius: AppRadius.xsAll,
-                  ),
-                  child: Text(_tl,
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: _tc)),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text('Crisis Detail',
-                      style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w700)),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(LucideIcons.x,
-                      size: 18, color: AppColors.textMuted),
-                ),
-              ],
-            ),
+              IconButton(
+                onPressed: widget.onToggleFlag,
+                icon: Icon(LucideIcons.flag, size: 15, color: c.flagged ? AppColors.error : AppColors.textMuted),
+                tooltip: c.flagged ? 'Unflag' : 'Flag',
+                visualDensity: VisualDensity.compact,
+              ),
+              IconButton(
+                onPressed: widget.onClose,
+                icon: const Icon(LucideIcons.x, size: 16, color: AppColors.textMuted),
+                visualDensity: VisualDensity.compact,
+              ),
+            ]),
           ),
           // Body
           Expanded(
             child: SingleChildScrollView(
               controller: widget.scrollCtrl,
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // User info card
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      borderRadius: AppRadius.mdAll,
-                    ),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 24,
-                          backgroundColor: _tc.withValues(alpha: 0.12),
-                          child: Text(
-                            e.userName.isNotEmpty
-                                ? e.userName[0].toUpperCase()
-                                : '?',
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: _tc),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(e.userName,
-                                  style: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700)),
-                              Text(e.userEmail,
-                                  style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textMuted)),
-                              if (e.university != null)
-                                Text(e.university!,
-                                    style: const TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.textMuted)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+              padding: const EdgeInsets.all(14),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+                // User card
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: AppRadius.mdAll),
+                  child: Row(children: [
+                    _Avatar(name: c.userName, color: tc, radius: 20),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(c.userName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                      Text(c.userEmail, style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                      if (c.university != null)
+                        Text(c.university!, style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                      const SizedBox(height: 5),
+                      Wrap(spacing: 6, children: [
+                        _InfoPill(label: 'Risk: ${c.riskScore.toInt()}', color: _riskColor(c.riskScore)),
+                        if (history.isNotEmpty) _InfoPill(label: '${history.length} prior', color: AppColors.error),
+                        if (c.escalationTarget != null) _InfoPill(label: 'Escalated: ${c.escalationTarget}', color: const Color(0xFF7C3AED)),
+                      ]),
+                    ])),
+                  ]),
+                ),
+                const SizedBox(height: 12),
+
+                // Status actions
+                _SectionLbl('STATUS'),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: c.status.color.withValues(alpha: 0.06),
+                    borderRadius: AppRadius.mdAll,
+                    border: Border.all(color: c.status.color.withValues(alpha: 0.2)),
                   ),
+                  child: Row(children: [
+                    Icon(c.status.icon, size: 14, color: c.status.color),
+                    const SizedBox(width: 6),
+                    Text(c.status.label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.status.color)),
+                    const Spacer(),
+                    Text(_relTime(c.createdAt), style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                  ]),
+                ),
+                const SizedBox(height: 8),
+                Wrap(spacing: 6, runSpacing: 6, children: _Status.values.where((s) => s != c.status).map((s) =>
+                  GestureDetector(
+                    onTap: () => widget.onSetStatus(s),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: s.color.withValues(alpha: 0.08),
+                        borderRadius: AppRadius.pillAll,
+                        border: Border.all(color: s.color.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(s.icon, size: 11, color: s.color),
+                        const SizedBox(width: 5),
+                        Text(s.label, style: TextStyle(fontSize: 11, color: s.color, fontWeight: FontWeight.w600)),
+                      ]),
+                    ),
+                  )
+                ).toList()),
+                const SizedBox(height: 12),
+
+                // Assign
+                _SectionLbl('ASSIGN TO'),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: c.assignedTo,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(borderRadius: AppRadius.mdAll, borderSide: const BorderSide(color: AppColors.border)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    isDense: true,
+                  ),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('Unassigned', style: TextStyle(fontSize: 12))),
+                    ...['Dr. Sarah Mitchell', 'Dr. James Okafor', 'Counselor A. Rivera', 'Counselor B. Chen'].map(
+                      (a) => DropdownMenuItem(value: a, child: Text(a, style: const TextStyle(fontSize: 12))),
+                    ),
+                  ],
+                  onChanged: widget.onAssign,
+                  style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: 12),
+
+                // Escalation
+                _SectionLbl('ESCALATE'),
+                const SizedBox(height: 6),
+                Wrap(spacing: 8, runSpacing: 6, children: [
+                  _EscBtn(label: 'Supervisor', icon: LucideIcons.settings, color: AppColors.warning, onTap: () => widget.onEscalate('Supervisor')),
+                  _EscBtn(label: 'Counseling', icon: LucideIcons.heartHandshake, color: const Color(0xFF7C3AED), onTap: () => widget.onEscalate('Counseling')),
+                  _EscBtn(label: 'Emergency', icon: LucideIcons.phone, color: AppColors.error, onTap: () => widget.onEscalate('Emergency Services')),
+                ]),
+                const SizedBox(height: 12),
+
+                // Full message
+                _SectionLbl('FLAGGED MESSAGE'),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: tc.withValues(alpha: 0.03),
+                    borderRadius: AppRadius.mdAll,
+                    border: Border.all(color: tc.withValues(alpha: 0.15)),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Text(DateFormat('MMM d, y · h:mm a').format(c.createdAt),
+                          style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () { Clipboard.setData(ClipboardData(text: c.content)); },
+                        child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(LucideIcons.copy, size: 11, color: AppColors.textMuted),
+                          SizedBox(width: 3),
+                          Text('Copy', style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                        ]),
+                      ),
+                    ]),
+                    const SizedBox(height: 6),
+                    Text(c.content, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, height: 1.55)),
+                  ]),
+                ),
+                const SizedBox(height: 12),
+
+                // Risk categories
+                if (c.categories.isNotEmpty) ...[
+                  _SectionLbl('RISK CATEGORIES'),
+                  const SizedBox(height: 6),
+                  Wrap(spacing: 6, runSpacing: 4, children: c.categories.map((cat) =>
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: tc.withValues(alpha: 0.08), borderRadius: AppRadius.smAll),
+                      child: Text(cat, style: TextStyle(fontSize: 11, color: tc, fontWeight: FontWeight.w600)),
+                    )).toList()),
                   const SizedBox(height: 12),
-                  // Flagged message
-                  _SectionLabel('Flagged Message', LucideIcons.flag, _tc),
+                ],
+
+                // SLA info
+                if (c.isActive) ...[
+                  _SectionLbl('SLA TARGET'),
                   const SizedBox(height: 6),
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: _tc.withValues(alpha: 0.05),
-                      borderRadius: AppRadius.smAll,
-                      border:
-                          Border.all(color: _tc.withValues(alpha: 0.2)),
+                      color: _slaColor(c.age, c.tier).withValues(alpha: 0.06),
+                      borderRadius: AppRadius.mdAll,
+                      border: Border.all(color: _slaColor(c.age, c.tier).withValues(alpha: 0.2)),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _HighlightedText(
-                            text: e.content, highlightColor: _tc),
-                        const SizedBox(height: 6),
-                        Text(
-                          DateFormat('MMM d, y · h:mm a')
-                              .format(e.createdAt),
-                          style: const TextStyle(
-                              fontSize: 10, color: AppColors.textMuted),
-                        ),
-                      ],
-                    ),
+                    child: Row(children: [
+                      Icon(LucideIcons.clock, size: 13, color: _slaColor(c.age, c.tier)),
+                      const SizedBox(width: 6),
+                      Text(_slaText(c.age, c.tier),
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _slaColor(c.age, c.tier))),
+                      const Spacer(),
+                      Text('Target: ${_slaDuration(c.tier).inMinutes < 60 ? '${_slaDuration(c.tier).inMinutes}min' : '${_slaDuration(c.tier).inHours}hr'}',
+                          style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                    ]),
                   ),
-                  const SizedBox(height: 14),
-                  // Assignment
-                  if (e.assignedTo != null) ...[
-                    _SectionLabel(
-                        'Assigned To', LucideIcons.userCheck, AppColors.primary),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryContainer,
-                        borderRadius: AppRadius.smAll,
-                      ),
-                      child: Text(e.assignedTo!,
-                          style: const TextStyle(
-                              fontSize: 13, color: AppColors.primary)),
-                    ),
-                    const SizedBox(height: 14),
-                  ],
-                  // Quick actions
-                  _SectionLabel(
-                      'Actions', LucideIcons.zap, AppColors.textSecondary),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      if (widget.onResolve != null)
-                        _ActionBtn(
-                          icon: LucideIcons.circleCheck,
-                          label: 'Resolve',
-                          color: AppColors.success,
-                          onTap: widget.onResolve!,
-                        ),
-                      _ActionBtn(
-                        icon: LucideIcons.messageCircle,
-                        label: 'View Chat',
-                        color: AppColors.info,
-                        onTap: widget.onViewChat,
-                      ),
-                      _ActionBtn(
-                        icon: LucideIcons.mail,
-                        label: 'Contact',
-                        color: AppColors.primary,
-                        onTap: widget.onContact,
-                      ),
-                      if (widget.onEscalate != null)
-                        _ActionBtn(
-                          icon: LucideIcons.triangleAlert,
-                          label: 'Escalate',
-                          color: AppColors.error,
-                          onTap: widget.onEscalate!,
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  // Notes
-                  _SectionLabel(
-                      'Case Notes (${e.notes.length})',
-                      LucideIcons.notebookPen,
-                      AppColors.textSecondary),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _noteCtrl,
-                          style: const TextStyle(fontSize: 13),
-                          decoration: InputDecoration(
-                            hintText: 'Add a note…',
-                            hintStyle: const TextStyle(
-                                fontSize: 13, color: AppColors.textMuted),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            filled: true,
-                            fillColor: AppColors.surfaceVariant,
-                            border: OutlineInputBorder(
-                              borderRadius: AppRadius.smAll,
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                        ),
+                  const SizedBox(height: 12),
+                ],
+
+                // Contact log
+                if (c.contacts.isNotEmpty) ...[
+                  _SectionLbl('CONTACT LOG (${c.contacts.length})'),
+                  const SizedBox(height: 6),
+                  ...c.contacts.map((ct) => Padding(
+                    padding: const EdgeInsets.only(bottom: 5),
+                    child: Row(children: [
+                      Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: AppRadius.smAll),
+                        child: Icon(_contactIcon(ct.method), size: 11, color: AppColors.textSecondary),
                       ),
                       const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: () {
-                          if (_noteCtrl.text.trim().isEmpty) return;
-                          widget.onAddNote(_noteCtrl.text.trim());
-                          _noteCtrl.clear();
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: AppRadius.smAll),
-                        ),
-                        child: const Text('Add',
-                            style: TextStyle(fontSize: 13)),
-                      ),
-                    ],
-                  ),
-                  if (e.notes.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    ...e.notes.reversed.map((n) => Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceVariant,
-                              borderRadius: AppRadius.smAll,
-                              border: Border.all(
-                                  color: AppColors.border),
-                            ),
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                Text(n.text,
-                                    style: const TextStyle(
-                                        fontSize: 13,
-                                        color: AppColors.textSecondary)),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${n.adminName} · ${DateFormat('MMM d, y HH:mm').format(n.createdAt)}',
-                                  style: const TextStyle(
-                                      fontSize: 10,
-                                      color: AppColors.textMuted),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )),
-                  ],
+                      Expanded(child: Text(ct.note, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
+                      Text(_relTime(ct.at), style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                    ]),
+                  )),
+                  const SizedBox(height: 12),
                 ],
-              ),
+
+                // Notes
+                _SectionLbl('ADMIN NOTES (${c.notes.length})'),
+                const SizedBox(height: 6),
+                ...c.notes.map((n) => Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: AppRadius.smAll),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Text(n.author, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                      const Spacer(),
+                      Text(_relTime(n.at), style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                    ]),
+                    const SizedBox(height: 3),
+                    Text(n.text, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4)),
+                  ]),
+                )),
+                // Add note input
+                Row(children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _noteCtrl,
+                      style: const TextStyle(fontSize: 12),
+                      decoration: InputDecoration(
+                        hintText: 'Add a note…',
+                        hintStyle: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                        filled: true,
+                        fillColor: AppColors.surfaceVariant,
+                        border: OutlineInputBorder(borderRadius: AppRadius.mdAll, borderSide: BorderSide.none),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        isDense: true,
+                      ),
+                      onSubmitted: (v) { if (v.trim().isEmpty) return; widget.onAddNote(v.trim()); _noteCtrl.clear(); },
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: () { final t = _noteCtrl.text.trim(); if (t.isEmpty) return; widget.onAddNote(t); _noteCtrl.clear(); },
+                    child: Container(
+                      padding: const EdgeInsets.all(9),
+                      decoration: BoxDecoration(color: AppColors.primary, borderRadius: AppRadius.mdAll),
+                      child: const Icon(LucideIcons.send, size: 14, color: Colors.white),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 12),
+
+                // Prior cases
+                if (history.isNotEmpty) ...[
+                  _SectionLbl('PRIOR CASES (${history.length})'),
+                  const SizedBox(height: 6),
+                  ...history.take(4).map((e) => Container(
+                    margin: const EdgeInsets.only(bottom: 5),
+                    padding: const EdgeInsets.all(9),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      borderRadius: AppRadius.smAll,
+                      border: Border(left: BorderSide(color: _tierColor(e.tier), width: 3)),
+                    ),
+                    child: Row(children: [
+                      _TierPill(tier: e.tier),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          e.content.length > 48 ? '${e.content.substring(0, 48)}…' : e.content,
+                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(_relTime(e.createdAt), style: const TextStyle(fontSize: 9, color: AppColors.textMuted)),
+                    ]),
+                  )),
+                  const SizedBox(height: 12),
+                ],
+
+                // Contact button
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: widget.onContact,
+                    icon: const Icon(LucideIcons.mail, size: 14),
+                    label: const Text('Contact ${'\u2022'} Log Outreach'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ]),
             ),
           ),
         ],
       ),
     );
   }
+
+  IconData _contactIcon(String method) => switch (method) {
+    'email'      => LucideIcons.mail,
+    'message'    => LucideIcons.messageCircle,
+    'phone'      => LucideIcons.phone,
+    _            => LucideIcons.triangleAlert,
+  };
 }
 
-// ─── Crisis Summary Header ────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared small widgets
+// ─────────────────────────────────────────────────────────────────────────────
 
-class _CrisisSummaryHeader extends StatelessWidget {
-  final int total, tier3, tier2, tier1, newAlerts;
-  final String lastChecked;
-  final bool liveMode;
-  final bool isMobile;
-  final VoidCallback onRefresh;
-  final VoidCallback onToggleLive;
+class _TierPill extends StatelessWidget {
+  final int tier;
+  const _TierPill({required this.tier});
+  @override
+  Widget build(BuildContext context) {
+    final c = _tierColor(tier);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(color: c, borderRadius: AppRadius.smAll),
+      child: Text(_tierLabel(tier),
+          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.4)),
+    );
+  }
+}
 
-  const _CrisisSummaryHeader({
-    required this.total,
-    required this.tier3,
-    required this.tier2,
-    required this.tier1,
-    required this.newAlerts,
-    required this.lastChecked,
-    required this.liveMode,
-    required this.isMobile,
-    required this.onRefresh,
-    required this.onToggleLive,
-  });
-
+class _StatusPill extends StatelessWidget {
+  final _Status status;
+  const _StatusPill({required this.status});
   @override
   Widget build(BuildContext context) => Container(
-        color: Colors.white,
-        padding: EdgeInsets.fromLTRB(16, 16, 16, isMobile ? 8 : 12),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: total > 0
-                        ? AppColors.errorContainer
-                        : AppColors.successContainer,
-                    borderRadius: AppRadius.smAll,
-                  ),
-                  child: Icon(
-                    total > 0
-                        ? LucideIcons.triangleAlert
-                        : LucideIcons.shieldCheck,
-                    color: total > 0
-                        ? AppColors.error
-                        : AppColors.success,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Crisis Monitor',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                            color: AppColors.textPrimary),
-                      ),
-                      if (!isMobile)
-                        const Text(
-                          'AI-scanned chat messages for crisis indicators',
-                          style: TextStyle(
-                              fontSize: 12, color: AppColors.textMuted),
-                        ),
-                    ],
-                  ),
-                ),
-                // New alerts badge
-                if (newAlerts > 0)
-                  Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.errorContainer,
-                      borderRadius: AppRadius.pillAll,
-                      border: Border.all(
-                          color: AppColors.error.withValues(alpha: 0.4)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(LucideIcons.bellRing,
-                            size: 11, color: AppColors.error),
-                        const SizedBox(width: 4),
-                        Text(
-                          '$newAlerts new',
-                          style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.error,
-                              fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                  ),
-                // Live toggle
-                GestureDetector(
-                  onTap: onToggleLive,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: liveMode
-                          ? AppColors.successContainer
-                          : AppColors.surfaceVariant,
-                      borderRadius: AppRadius.pillAll,
-                      border: Border.all(
-                          color: liveMode
-                              ? AppColors.success.withValues(alpha: 0.4)
-                              : AppColors.border),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: liveMode
-                                ? AppColors.success
-                                : AppColors.textMuted,
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          liveMode ? 'LIVE' : 'PAUSED',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: liveMode
-                                  ? AppColors.success
-                                  : AppColors.textMuted),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                if (!isMobile)
-                  Text(
-                    'Checked: $lastChecked',
-                    style: const TextStyle(
-                        fontSize: 11, color: AppColors.textMuted),
-                  ),
-                const SizedBox(width: 4),
-                IconButton(
-                  onPressed: onRefresh,
-                  icon: const Icon(LucideIcons.refreshCw,
-                      size: 16, color: AppColors.textMuted),
-                  tooltip: 'Refresh now',
-                  style: IconButton.styleFrom(
-                      padding: const EdgeInsets.all(6)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Stats row
-            isMobile
-                ? Row(
-                    children: [
-                      _SummaryCounter(
-                          label: 'Active',
-                          value: total,
-                          color: total > 0
-                              ? AppColors.error
-                              : AppColors.success),
-                      const SizedBox(width: 8),
-                      _SummaryCounter(
-                          label: 'T3',
-                          value: tier3,
-                          color: AppColors.error),
-                      const SizedBox(width: 8),
-                      _SummaryCounter(
-                          label: 'T2',
-                          value: tier2,
-                          color: AppColors.warning),
-                      const SizedBox(width: 8),
-                      _SummaryCounter(
-                          label: 'T1',
-                          value: tier1,
-                          color: AppColors.info),
-                    ],
-                  )
-                : Row(
-                    children: [
-                      _SummaryCounter(
-                        label: 'Total Active',
-                        value: total,
-                        color: total > 0
-                            ? AppColors.error
-                            : AppColors.success,
-                        large: true,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Row(
-                          children: [
-                            _SummaryCounter(
-                                label: 'Critical (T3)',
-                                value: tier3,
-                                color: AppColors.error),
-                            const SizedBox(width: 8),
-                            _SummaryCounter(
-                                label: 'High (T2)',
-                                value: tier2,
-                                color: AppColors.warning),
-                            const SizedBox(width: 8),
-                            _SummaryCounter(
-                                label: 'Moderate (T1)',
-                                value: tier1,
-                                color: AppColors.info),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-          ],
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(
+      color: status.color.withValues(alpha: 0.1),
+      borderRadius: AppRadius.smAll,
+      border: Border.all(color: status.color.withValues(alpha: 0.3)),
+    ),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(status.icon, size: 8, color: status.color),
+      const SizedBox(width: 3),
+      Text(status.label.toUpperCase(),
+          style: TextStyle(fontSize: 8, color: status.color, fontWeight: FontWeight.w800, letterSpacing: 0.3)),
+    ]),
+  );
 }
 
-class _SummaryCounter extends StatelessWidget {
-  final String label;
-  final int value;
+class _Avatar extends StatelessWidget {
+  final String name;
   final Color color;
-  final bool large;
+  final double radius;
+  const _Avatar({required this.name, required this.color, required this.radius});
+  @override
+  Widget build(BuildContext context) {
+    final initials = name.trim().split(' ').map((w) => w.isNotEmpty ? w[0].toUpperCase() : '').take(2).join();
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: color.withValues(alpha: 0.15),
+      child: Text(initials, style: TextStyle(fontSize: radius * 0.65, color: color, fontWeight: FontWeight.w700)),
+    );
+  }
+}
 
-  const _SummaryCounter({
-    required this.label,
-    required this.value,
-    required this.color,
-    this.large = false,
-  });
-
+class _InfoPill extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _InfoPill({required this.label, required this.color});
   @override
   Widget build(BuildContext context) => Container(
-        padding: EdgeInsets.symmetric(
-            horizontal: large ? 16 : 12, vertical: large ? 12 : 8),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: AppRadius.mdAll,
-          border: Border.all(color: color.withValues(alpha: 0.25)),
-        ),
-        child: Column(
-          children: [
-            Text(
-              '$value',
-              style: TextStyle(
-                  fontSize: large ? 28 : 18,
-                  fontWeight: FontWeight.w800,
-                  color: color),
-            ),
-            Text(
-              label,
-              style: TextStyle(
-                  fontSize: 10,
-                  color: color,
-                  fontWeight: FontWeight.w500),
-            ),
-          ],
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: AppRadius.smAll),
+    child: Text(label, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w700)),
+  );
 }
 
-// ─── Tier Filter Chip ─────────────────────────────────────
-
-class _TierFilterChip extends StatelessWidget {
+class _EscBtn extends StatelessWidget {
   final String label;
-  final int count;
+  final IconData icon;
   final Color color;
-  final bool selected;
   final VoidCallback onTap;
-
-  const _TierFilterChip({
-    required this.label,
-    required this.count,
-    required this.color,
-    required this.selected,
-    required this.onTap,
-  });
-
+  const _EscBtn({required this.label, required this.icon, required this.color, required this.onTap});
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: selected ? color : color.withValues(alpha: 0.08),
-            borderRadius: AppRadius.pillAll,
-            border: Border.all(
-                color: selected ? color : color.withValues(alpha: 0.3)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: selected ? Colors.white : color,
-                    fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(width: 6),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? Colors.white.withValues(alpha: 0.3)
-                      : color.withValues(alpha: 0.15),
-                  borderRadius: AppRadius.pillAll,
-                ),
-                child: Text(
-                  '$count',
-                  style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      color: selected ? Colors.white : color),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-}
-
-// ─── Crisis List View ─────────────────────────────────────
-
-class _CrisisListView extends StatelessWidget {
-  final List<_CrisisEntry> entries;
-  final ValueChanged<String>? onResolve;
-  final ValueChanged<String>? onUnresolve;
-  final ValueChanged<_CrisisEntry> onContact;
-  final ValueChanged<_CrisisEntry>? onEscalate;
-  final ValueChanged<_CrisisEntry> onViewChat;
-  final ValueChanged<_CrisisEntry> onViewDetail;
-  final ValueChanged<_CrisisEntry> onAddNote;
-  final ValueChanged<_CrisisEntry> onUserHistory;
-  final ValueChanged<_CrisisEntry>? onAssign;
-  final ValueChanged<_CrisisEntry>? onQuickBan;
-  final String emptyTitle;
-  final String emptySubtitle;
-  final IconData emptyIcon;
-  final bool isGreenState;
-
-  const _CrisisListView({
-    required this.entries,
-    required this.onResolve,
-    this.onUnresolve,
-    required this.onContact,
-    required this.onEscalate,
-    required this.onViewChat,
-    required this.onViewDetail,
-    required this.onAddNote,
-    required this.onUserHistory,
-    required this.onAssign,
-    required this.onQuickBan,
-    required this.emptyTitle,
-    required this.emptySubtitle,
-    required this.emptyIcon,
-    required this.isGreenState,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (entries.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: isGreenState
-                    ? AppColors.successContainer
-                    : AppColors.surfaceVariant,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(emptyIcon,
-                  size: 48,
-                  color: isGreenState
-                      ? AppColors.success
-                      : AppColors.textMuted),
-            ),
-            const SizedBox(height: 16),
-            Text(emptyTitle,
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary)),
-            const SizedBox(height: 6),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40),
-              child: Text(emptySubtitle,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 13, color: AppColors.textMuted)),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: entries.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (ctx, i) => _CrisisCard(
-        entry: entries[i],
-        onResolve: onResolve,
-        onUnresolve: onUnresolve,
-        onContact: onContact,
-        onEscalate: onEscalate,
-        onViewChat: onViewChat,
-        onViewDetail: onViewDetail,
-        onAddNote: onAddNote,
-        onUserHistory: onUserHistory,
-        onAssign: onAssign,
-        onQuickBan: onQuickBan,
-        delay: Duration(milliseconds: i * 40),
-      ),
-    );
-  }
-}
-
-// ─── Crisis Card ──────────────────────────────────────────
-
-class _CrisisCard extends StatefulWidget {
-  final _CrisisEntry entry;
-  final ValueChanged<String>? onResolve;
-  final ValueChanged<String>? onUnresolve;
-  final ValueChanged<_CrisisEntry> onContact;
-  final ValueChanged<_CrisisEntry>? onEscalate;
-  final ValueChanged<_CrisisEntry> onViewChat;
-  final ValueChanged<_CrisisEntry> onViewDetail;
-  final ValueChanged<_CrisisEntry> onAddNote;
-  final ValueChanged<_CrisisEntry> onUserHistory;
-  final ValueChanged<_CrisisEntry>? onAssign;
-  final ValueChanged<_CrisisEntry>? onQuickBan;
-  final Duration delay;
-
-  const _CrisisCard({
-    required this.entry,
-    required this.onResolve,
-    this.onUnresolve,
-    required this.onContact,
-    required this.onEscalate,
-    required this.onViewChat,
-    required this.onViewDetail,
-    required this.onAddNote,
-    required this.onUserHistory,
-    required this.onAssign,
-    required this.onQuickBan,
-    required this.delay,
-  });
-
-  @override
-  State<_CrisisCard> createState() => _CrisisCardState();
-}
-
-class _CrisisCardState extends State<_CrisisCard> {
-  bool _expanded = false;
-
-  Color get _tc => widget.entry.tier == 3
-      ? AppColors.error
-      : widget.entry.tier == 2
-          ? AppColors.warning
-          : AppColors.info;
-
-  String get _tl => widget.entry.tier == 3
-      ? 'CRITICAL'
-      : widget.entry.tier == 2
-          ? 'HIGH RISK'
-          : 'MODERATE';
-
-  @override
-  Widget build(BuildContext context) {
-    final e = widget.entry;
-
-    Widget card = InkWell(
-      onTap: () => widget.onViewDetail(e),
-      borderRadius: AppRadius.lgAll,
-      child: Container(
-        decoration: BoxDecoration(
-          color: e.resolved ? AppColors.surfaceVariant : Colors.white,
-          borderRadius: AppRadius.lgAll,
-          border: Border(
-            left: BorderSide(color: _tc, width: 4),
-            top: const BorderSide(color: AppColors.border),
-            right: const BorderSide(color: AppColors.border),
-            bottom: const BorderSide(color: AppColors.border),
-          ),
-          boxShadow: e.resolved ? [] : AppShadow.sm,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Header ────────────────────────────
-              Row(
-                children: [
-                  _TierBadgeSmall(tier: e.tier),
-                  const SizedBox(width: 6),
-                  if (e.resolved)
-                    const _TierBadgeSmall(
-                        tier: -1, label: 'RESOLVED'),
-                  if (e.assignedTo != null) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryContainer,
-                        borderRadius: AppRadius.pillAll,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(LucideIcons.userCheck,
-                              size: 9, color: AppColors.primary),
-                          const SizedBox(width: 3),
-                          Text(e.assignedTo!,
-                              style: const TextStyle(
-                                  fontSize: 9,
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                  ],
-                  if (e.notes.isNotEmpty) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceVariant,
-                        borderRadius: AppRadius.pillAll,
-                        border:
-                            Border.all(color: AppColors.border),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(LucideIcons.notebookPen,
-                              size: 9,
-                              color: AppColors.textMuted),
-                          const SizedBox(width: 3),
-                          Text('${e.notes.length}',
-                              style: const TextStyle(
-                                  fontSize: 9,
-                                  color: AppColors.textMuted,
-                                  fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const Spacer(),
-                  Text(
-                    _relativeTime(e.createdAt),
-                    style: const TextStyle(
-                        fontSize: 11, color: AppColors.textMuted),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              // ── User Info ─────────────────────────
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: _tc.withValues(alpha: 0.1),
-                    child: Text(
-                      e.userName.isNotEmpty
-                          ? e.userName[0].toUpperCase()
-                          : '?',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: _tc),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(e.userName,
-                            style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                                color: e.resolved
-                                    ? AppColors.textMuted
-                                    : AppColors.textPrimary)),
-                        Text(e.userEmail,
-                            style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textMuted),
-                            overflow: TextOverflow.ellipsis),
-                      ],
-                    ),
-                  ),
-                  if (e.university != null)
-                    Container(
-                      constraints: const BoxConstraints(maxWidth: 120),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceVariant,
-                        borderRadius: AppRadius.pillAll,
-                      ),
-                      child: Text(
-                        e.university!,
-                        style: const TextStyle(
-                            fontSize: 10,
-                            color: AppColors.textMuted),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              // ── Flagged Message ───────────────────
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: _tc.withValues(alpha: 0.05),
-                  borderRadius: AppRadius.smAll,
-                  border: Border.all(
-                      color: _tc.withValues(alpha: 0.15)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(LucideIcons.messageCircle,
-                            size: 10, color: _tc),
-                        const SizedBox(width: 4),
-                        Text('Flagged Message',
-                            style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: _tc)),
-                        const Spacer(),
-                        GestureDetector(
-                          onTap: () =>
-                              setState(() => _expanded = !_expanded),
-                          child: Text(
-                            _expanded ? 'Show less' : 'Show more',
-                            style: TextStyle(
-                                fontSize: 10,
-                                color: _tc,
-                                fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    _HighlightedText(
-                      text: _expanded
-                          ? e.content
-                          : (e.content.length > 130
-                              ? '${e.content.substring(0, 130)}…'
-                              : e.content),
-                      highlightColor: _tc,
-                    ),
-                  ],
-                ),
-              ),
-              // Resolved info
-              if (e.resolved && e.resolvedAt != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  'Resolved ${_relativeTime(e.resolvedAt!)} · ${DateFormat('MMM d, y').format(e.resolvedAt!)}',
-                  style: const TextStyle(
-                      fontSize: 10,
-                      color: AppColors.success,
-                      fontStyle: FontStyle.italic),
-                ),
-              ],
-              const SizedBox(height: 10),
-              // ── Actions ───────────────────────────
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    if (widget.onResolve != null && !e.resolved) ...[
-                      _CrisisActionBtn(
-                        icon: LucideIcons.circleCheck,
-                        label: 'Resolve',
-                        color: AppColors.success,
-                        onTap: () =>
-                            widget.onResolve!(e.messageId),
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                    if (widget.onUnresolve != null && e.resolved) ...[
-                      _CrisisActionBtn(
-                        icon: LucideIcons.rotateCcw,
-                        label: 'Re-open',
-                        color: AppColors.warning,
-                        onTap: () =>
-                            widget.onUnresolve!(e.messageId),
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                    _CrisisActionBtn(
-                      icon: LucideIcons.messageCircle,
-                      label: 'View Chat',
-                      color: AppColors.info,
-                      onTap: () => widget.onViewChat(e),
-                    ),
-                    const SizedBox(width: 6),
-                    _CrisisActionBtn(
-                      icon: LucideIcons.mail,
-                      label: 'Contact',
-                      color: AppColors.primary,
-                      onTap: () => widget.onContact(e),
-                    ),
-                    const SizedBox(width: 6),
-                    _CrisisActionBtn(
-                      icon: LucideIcons.history,
-                      label: 'History',
-                      color: AppColors.textSecondary,
-                      onTap: () => widget.onUserHistory(e),
-                    ),
-                    const SizedBox(width: 6),
-                    _CrisisActionBtn(
-                      icon: LucideIcons.notebookPen,
-                      label: 'Note',
-                      color: AppColors.textSecondary,
-                      onTap: () => widget.onAddNote(e),
-                    ),
-                    if (widget.onAssign != null && !e.resolved) ...[
-                      const SizedBox(width: 6),
-                      _CrisisActionBtn(
-                        icon: LucideIcons.userCheck,
-                        label: 'Assign',
-                        color: AppColors.primary,
-                        onTap: () => widget.onAssign!(e),
-                      ),
-                    ],
-                    if (widget.onEscalate != null && !e.resolved) ...[
-                      const SizedBox(width: 6),
-                      _CrisisActionBtn(
-                        icon: LucideIcons.triangleAlert,
-                        label: 'Escalate',
-                        color: AppColors.warning,
-                        onTap: () => widget.onEscalate!(e),
-                      ),
-                    ],
-                    if (widget.onQuickBan != null && !e.resolved) ...[
-                      const SizedBox(width: 6),
-                      _CrisisActionBtn(
-                        icon: LucideIcons.ban,
-                        label: 'Ban',
-                        color: AppColors.error,
-                        onTap: () => widget.onQuickBan!(e),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    if (e.tier == 3 && !e.resolved) {
-      card = card
-          .animate(onPlay: (c) => c.repeat(reverse: true))
-          .custom(
-            duration: 1200.ms,
-            builder: (ctx, value, child) => Container(
-              decoration: BoxDecoration(
-                borderRadius: AppRadius.lgAll,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.error.withValues(alpha: 0.3 * value),
-                    blurRadius: 12,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: child,
-            ),
-          );
-    }
-
-    return card
-        .animate(delay: widget.delay)
-        .fadeIn(duration: 250.ms)
-        .slideX(begin: -0.02);
-  }
-}
-
-// ─── Helpers ──────────────────────────────────────────────
-
-class _TierBadgeSmall extends StatelessWidget {
-  final int tier;
-  final String? label;
-
-  const _TierBadgeSmall({required this.tier, this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    final Color col;
-    final String txt;
-    if (tier == -1) {
-      col = AppColors.success;
-      txt = label ?? 'RESOLVED';
-    } else if (tier == 3) {
-      col = AppColors.error;
-      txt = label ?? 'CRITICAL';
-    } else if (tier == 2) {
-      col = AppColors.warning;
-      txt = label ?? 'HIGH';
-    } else {
-      col = AppColors.info;
-      txt = label ?? 'MODERATE';
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: col.withValues(alpha: 0.12),
-        borderRadius: AppRadius.xsAll,
-        border: Border.all(color: col.withValues(alpha: 0.35)),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: AppRadius.smAll,
+        border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
-      child: Text(txt,
-          style: TextStyle(
-              color: col,
-              fontSize: 9,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.4)),
-    );
-  }
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 5),
+        Text(label, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+      ]),
+    ),
+  );
 }
 
-class _SectionLabel extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-
-  const _SectionLabel(this.label, this.icon, this.color);
-
-  @override
-  Widget build(BuildContext context) => Row(
-        children: [
-          Icon(icon, size: 13, color: color),
-          const SizedBox(width: 6),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: color)),
-        ],
-      );
-}
-
-class _ActionBtn extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ActionBtn({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) => InkWell(
-        onTap: onTap,
-        borderRadius: AppRadius.smAll,
-        child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: AppRadius.smAll,
-            border: Border.all(color: color.withValues(alpha: 0.3)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 13, color: color),
-              const SizedBox(width: 5),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: color,
-                      fontWeight: FontWeight.w600)),
-            ],
-          ),
-        ),
-      );
-}
-
-// ─── Highlighted Text ─────────────────────────────────────
-
-class _HighlightedText extends StatelessWidget {
+class _SectionLbl extends StatelessWidget {
   final String text;
-  final Color highlightColor;
-
-  static const _allKeywords = [
-    ..._tier3Keywords, ..._tier2Keywords, ..._tier1Keywords,
-  ];
-
-  const _HighlightedText(
-      {required this.text, required this.highlightColor});
-
+  const _SectionLbl(this.text);
   @override
-  Widget build(BuildContext context) {
-    final lower = text.toLowerCase();
-    final spans = <TextSpan>[];
-    final matches = <MapEntry<int, String>>[];
-    for (final kw in _allKeywords) {
-      int idx = lower.indexOf(kw);
-      while (idx >= 0) {
-        matches.add(MapEntry(idx, kw));
-        idx = lower.indexOf(kw, idx + 1);
-      }
-    }
-    matches.sort((a, b) => a.key.compareTo(b.key));
-    int cursor = 0;
-    for (final m in matches) {
-      if (m.key < cursor) continue;
-      if (m.key > cursor) {
-        spans.add(TextSpan(
-          text: text.substring(cursor, m.key),
-          style: const TextStyle(
-              fontSize: 13, color: AppColors.textSecondary),
-        ));
-      }
-      spans.add(TextSpan(
-        text: text.substring(m.key, m.key + m.value.length),
-        style: TextStyle(
-          fontSize: 13,
-          color: highlightColor,
-          fontWeight: FontWeight.w700,
-          backgroundColor: highlightColor.withValues(alpha: 0.12),
-        ),
-      ));
-      cursor = m.key + m.value.length;
-    }
-    if (cursor < text.length) {
-      spans.add(TextSpan(
-        text: text.substring(cursor),
-        style: const TextStyle(
-            fontSize: 13, color: AppColors.textSecondary),
-      ));
-    }
-    return RichText(
-      text: TextSpan(children: spans),
-      maxLines: 8,
-      overflow: TextOverflow.ellipsis,
-    );
-  }
+  Widget build(BuildContext context) => Text(text,
+      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textMuted, letterSpacing: 0.8));
 }
 
-// ─── Crisis Action Button ─────────────────────────────────
-
-class _CrisisActionBtn extends StatelessWidget {
+class _ContactOption extends StatelessWidget {
   final IconData icon;
-  final String label;
+  final String title, subtitle;
   final Color color;
   final VoidCallback onTap;
-
-  const _CrisisActionBtn({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
+  const _ContactOption({required this.icon, required this.title, required this.subtitle, required this.color, required this.onTap});
   @override
-  Widget build(BuildContext context) => InkWell(
-        onTap: onTap,
-        borderRadius: AppRadius.smAll,
-        child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: AppRadius.smAll,
-            border: Border.all(color: color.withValues(alpha: 0.3)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 12, color: color),
-              const SizedBox(width: 4),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: color,
-                      fontWeight: FontWeight.w500)),
-            ],
-          ),
-        ),
-      );
-}
-
-// ─── Tab Badge ────────────────────────────────────────────
-
-class _TabBadge extends StatelessWidget {
-  final int count;
-  final Color color;
-
-  const _TabBadge(this.count, this.color);
-
-  @override
-  Widget build(BuildContext context) => Container(
-        width: 18,
-        height: 18,
-        decoration:
-            BoxDecoration(color: color, shape: BoxShape.circle),
-        child: Center(
-          child: Text(
-            '$count',
-            style: const TextStyle(
-                color: Colors.white,
-                fontSize: 9,
-                fontWeight: FontWeight.w800),
-          ),
-        ),
-      );
-}
-
-// ─── Keywords Reference Panel ─────────────────────────────
-
-class _KeywordsPanel extends StatelessWidget {
-  final bool expanded;
-  final VoidCallback onToggle;
-
-  const _KeywordsPanel(
-      {required this.expanded, required this.onToggle});
-
-  @override
-  Widget build(BuildContext context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: AppColors.border)),
-        ),
-        child: Column(
-          children: [
-            InkWell(
-              onTap: onToggle,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 10),
-                child: Row(
-                  children: [
-                    const Icon(LucideIcons.bookOpen,
-                        size: 14, color: AppColors.textMuted),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Keyword Reference',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary),
-                    ),
-                    const Spacer(),
-                    Icon(
-                      expanded
-                          ? LucideIcons.chevronDown
-                          : LucideIcons.chevronUp,
-                      size: 14,
-                      color: AppColors.textMuted,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (expanded)
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Column(
-                  children: [
-                    _KeywordTier(
-                      label: 'Critical — Tier 3',
-                      color: AppColors.error,
-                      keywords: _tier3Keywords,
-                    ),
-                    const SizedBox(height: 8),
-                    _KeywordTier(
-                      label: 'High Risk — Tier 2',
-                      color: AppColors.warning,
-                      keywords: _tier2Keywords,
-                    ),
-                    const SizedBox(height: 8),
-                    _KeywordTier(
-                      label: 'Moderate — Tier 1',
-                      color: AppColors.info,
-                      keywords: _tier1Keywords,
-                    ),
-                  ],
-                ),
-              ).animate().fadeIn(duration: 150.ms),
-          ],
-        ),
-      );
-}
-
-class _KeywordTier extends StatelessWidget {
-  final String label;
-  final Color color;
-  final List<String> keywords;
-
-  const _KeywordTier({
-    required this.label,
-    required this.color,
-    required this.keywords,
-  });
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.05),
-          borderRadius: AppRadius.smAll,
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: color)),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              children: keywords
-                  .map((kw) => Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.1),
-                          borderRadius: AppRadius.pillAll,
-                        ),
-                        child: Text(kw,
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: color,
-                                fontWeight: FontWeight.w500)),
-                      ))
-                  .toList(),
-            ),
-          ],
-        ),
-      );
+  Widget build(BuildContext context) => ListTile(
+    leading: Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: AppRadius.smAll),
+      child: Icon(icon, size: 18, color: color),
+    ),
+    title: Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+    subtitle: Text(subtitle, style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+    onTap: onTap,
+    contentPadding: EdgeInsets.zero,
+  );
 }

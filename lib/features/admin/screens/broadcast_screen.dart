@@ -93,11 +93,72 @@ class _BroadcastScreenState extends ConsumerState<BroadcastScreen>
 
     return Column(
       children: [
-        // ── Stats Bar ───────────────────────────────────────
-        _BroadcastStatsBar(
-          totalSent: state.broadcasts.length,
-          totalRecipients: state.broadcasts.fold(0, (s, b) => s + b.recipientCount),
-          totalUsers: state.stats.totalUsers,
+        // ── Hero Header ─────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF0D5C57), AppColors.primary],
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: AppRadius.smAll,
+                    ),
+                    child: const Icon(LucideIcons.megaphone,
+                        size: 18, color: Colors.white),
+                  ),
+                  const SizedBox(width: 12),
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Broadcast',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16)),
+                      Text('Send messages to users',
+                          style: TextStyle(color: Colors.white70, fontSize: 11)),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _HeroChip(
+                        icon: LucideIcons.send,
+                        label: 'Sent',
+                        value: state.broadcasts.length.toString()),
+                    const SizedBox(width: 8),
+                    _HeroChip(
+                        icon: LucideIcons.users,
+                        label: 'Reached',
+                        value: state.broadcasts
+                            .fold(0, (s, b) => s + b.recipientCount)
+                            .toString()),
+                    const SizedBox(width: 8),
+                    _HeroChip(
+                        icon: LucideIcons.target,
+                        label: 'Platform',
+                        value: state.stats.totalUsers.toString()),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
 
         // ── Tabs ────────────────────────────────────────────
@@ -232,6 +293,41 @@ class _BroadcastScreenState extends ConsumerState<BroadcastScreen>
       ],
     );
   }
+}
+
+// ─── Hero Chip ────────────────────────────────────────────
+
+class _HeroChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _HeroChip({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.15),
+          borderRadius: AppRadius.smAll,
+          border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: Colors.white70),
+            const SizedBox(width: 6),
+            Text(value,
+                style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white)),
+            const SizedBox(width: 4),
+            Text(label,
+                style: const TextStyle(fontSize: 11, color: Colors.white60)),
+          ],
+        ),
+      );
 }
 
 // ─── Stats Bar ────────────────────────────────────────────

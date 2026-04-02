@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ─── Models ───────────────────────────────────────────────
@@ -810,16 +813,44 @@ class AdminNotifier extends StateNotifier<AdminState> {
 
   Future<bool> warnUser(String userId, String reason) async {
     try {
-      await _db.from('user_flags').insert({
-        'user_id': userId,
-        'flagged_by': _db.auth.currentUser?.id,
-        'flag_type': 'warn',
-        'reason': reason,
-        'is_active': true,
-      });
+      // Try inserting into user_flags — table may not exist in all envs, so swallow errors
+      try {
+        await _db.from('user_flags').insert({
+          'user_id': userId,
+          'flagged_by': _db.auth.currentUser?.id,
+          'flag_type': 'warn',
+          'reason': reason,
+          'is_active': true,
+        });
+      } catch (_) {}
+
+      // Always log to moderation_actions (best-effort)
       await _logModerationAction(action: 'warn', targetType: 'user', targetId: userId, reason: reason);
+
+      // Optionally send a warning email if we have the user's email
+      try {
+        final profile = await _db
+            .from('profiles')
+            .select('email, name')
+            .eq('id', userId)
+            .single();
+        final email = profile['email'] as String? ?? '';
+        final name  = profile['name']  as String? ?? 'Student';
+        if (email.isNotEmpty) {
+          await emailUser(
+            toEmail: email,
+            toName: name,
+            subject: 'Important notice from MindBridge Support',
+            message: reason,
+            fromAdminName: 'MindBridge Admin',
+          );
+        }
+      } catch (_) {}
+
       return true;
-    } catch (_) { return false; }
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<bool> deleteUser(String userId) async {
@@ -857,18 +888,8 @@ class AdminNotifier extends StateNotifier<AdminState> {
     required String fromAdminName,
   }) async {
     try {
-      // Log to admin_broadcasts table as an email record
-      await _db.from('admin_broadcasts').insert({
-        'title': subject,
-        'body': message,
-        'target': 'user:$toEmail',
-        'sent_by': _db.auth.currentUser?.id,
-        'recipient_count': 1,
-        'channel': 'email',
-      });
-
-      // Fire via backend email service
-      await _postHttp('http://localhost:3001', '/api/email/admin-message', {
+      // 1. Send via backend SMTP
+      final sent = await _postBackend('/api/email/admin_message', {
         'to_email': toEmail,
         'to_name': toName,
         'subject': subject,
@@ -876,25 +897,44 @@ class AdminNotifier extends StateNotifier<AdminState> {
         'from_admin': fromAdminName,
       });
 
+      // 2. Log to admin_broadcasts (best-effort — ignore if table missing columns)
+      try {
+        await _db.from('admin_broadcasts').insert({
+          'title': subject,
+          'body': message,
+          'target': 'user:$toEmail',
+          'sent_by': _db.auth.currentUser?.id,
+          'recipient_count': 1,
+        });
+      } catch (_) {}
+
+      // 3. Log moderation action (best-effort)
       await _logModerationAction(
-        action: 'warn',
+        action: 'email',
         targetType: 'user',
         targetId: toEmail,
         reason: 'Email sent: $subject',
       );
-      return true;
+
+      return sent;
     } catch (_) {
       return false;
     }
   }
 
-  Future<bool> _postHttp(String base, String path, Map<String, dynamic> body) async {
+  /// Real HTTP POST to the Dart Frog backend.
+  Future<bool> _postBackend(String path, Map<String, dynamic> body) async {
     try {
-      // Using Supabase's built-in http via dart:io is not available in web,
-      // so we record the intent to the DB and rely on the backend webhook.
-      // For now the record in admin_broadcasts serves as the log.
-      return true;
-    } catch (_) { return false; }
+      final base = dotenv.maybeGet('BACKEND_URL') ?? 'http://localhost:3001';
+      final res = await http.post(
+        Uri.parse('$base$path'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      ).timeout(const Duration(seconds: 10));
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
   }
 
   // ─── Community Moderation ─────────────────────────────
