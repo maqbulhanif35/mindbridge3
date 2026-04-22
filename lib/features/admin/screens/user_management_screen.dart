@@ -1,7 +1,4 @@
-// ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:convert';
-// ignore: undefined_hidden_name
-import 'dart:html' as html;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -10,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/design_tokens.dart';
+import '../../../core/utils/csv_exporter.dart';
 import '../providers/admin_provider.dart';
 
 class UserManagementScreen extends ConsumerStatefulWidget {
@@ -75,13 +73,18 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
         DateFormat('yyyy-MM-dd').format(u.createdAt),
       ].join(','));
     }
-    final bytes = utf8.encode(buf.toString());
-    final blob = html.Blob([bytes], 'text/csv');
-    final url = html.Url.createObjectUrlFromBlob(blob);
-    html.AnchorElement(href: url)
-      ..setAttribute('download', 'mindbridge_users_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv')
-      ..click();
-    html.Url.revokeObjectUrl(url);
+
+    CsvExporter.export(
+      csvData: buf.toString(),
+      fileName: 'mindbridge_users_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv',
+      onMessage: (msg) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), backgroundColor: AppColors.primary),
+          );
+        }
+      },
+    );
   }
 
   String _csvCell(String s) {
