@@ -336,6 +336,7 @@ class _JournalEntryScreenState extends ConsumerState<JournalEntryScreen> {
       bottomNavigationBar: _buildBottomBar(moodState, safeArea),
       body: SingleChildScrollView(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // ─── Paper Container ─────────────────────────────────────────
             Container(
@@ -426,7 +427,7 @@ class _JournalEntryScreenState extends ConsumerState<JournalEntryScreen> {
                         filled: false,
                         contentPadding: EdgeInsets.zero,
                       ),
-                    ).animate().fadeIn(delay: 150.ms),
+                    ),
                   ),
 
                   // Mood-tinted divider
@@ -470,7 +471,7 @@ class _JournalEntryScreenState extends ConsumerState<JournalEntryScreen> {
                         filled: false,
                         contentPadding: EdgeInsets.zero,
                       ),
-                    ).animate().fadeIn(delay: 200.ms),
+                    ),
                   ),
 
                   const SizedBox(height: 16),
@@ -502,13 +503,12 @@ class _JournalEntryScreenState extends ConsumerState<JournalEntryScreen> {
                   const SizedBox(height: 28),
                 ],
               ),
-            )
-                .animate()
-                .fadeIn(duration: 400.ms)
-                .slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
+            ),
 
             const SizedBox(height: 20),
+            const SizedBox(height: 100),
           ],
+
         ),
       ),
     );
@@ -630,7 +630,7 @@ class _JournalEntryScreenState extends ConsumerState<JournalEntryScreen> {
           ),
         ],
       ),
-    ).animate().fadeIn();
+    );
   }
 
   // ─── Writing Mode Selector ────────────────────────────────────────────────
@@ -676,7 +676,7 @@ class _JournalEntryScreenState extends ConsumerState<JournalEntryScreen> {
           );
         }).toList(),
       ),
-    ).animate().fadeIn(delay: 80.ms);
+    );
   }
 
   // ─── Mood Selector ────────────────────────────────────────────────────────
@@ -730,7 +730,7 @@ class _JournalEntryScreenState extends ConsumerState<JournalEntryScreen> {
           ),
         );
       }),
-    ).animate().fadeIn(delay: 100.ms);
+    );
   }
 
   // ─── Mood Prompt Card ─────────────────────────────────────────────────────
@@ -785,7 +785,7 @@ class _JournalEntryScreenState extends ConsumerState<JournalEntryScreen> {
           ],
         ),
       ),
-    ).animate().fadeIn(duration: 300.ms);
+    );
   }
 
   // ─── Writing Goal ─────────────────────────────────────────────────────────
@@ -1143,13 +1143,14 @@ class _JournalEntryScreenState extends ConsumerState<JournalEntryScreen> {
           ),
         ],
       ),
-    ).animate().fadeIn();
+    );
   }
 
   // ─── Bottom Save Bar ──────────────────────────────────────────────────────
 
   Widget _buildBottomBar(MoodState moodState, double safeArea) {
     return Container(
+      height: 100,
       color: Colors.white,
       padding: EdgeInsets.fromLTRB(16, 10, 16, 20 + safeArea),
       child: Row(
@@ -1212,8 +1213,8 @@ class _JournalEntryScreenState extends ConsumerState<JournalEntryScreen> {
           const SizedBox(width: 8),
 
           // Save Entry button (primary gradient, flex 2)
-          Expanded(
-            flex: 2,
+          Flexible(
+            flex: 1,
             child: GestureDetector(
               onTap: moodState.isLoading ? null : _save,
               child: AnimatedContainer(
