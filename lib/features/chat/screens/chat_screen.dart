@@ -137,6 +137,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             _ChatHeader(
               streamState: chatState.streamState,
               justListenMode: _justListenMode,
+              useLocalModel: chatState.useLocalModel,
               messageCount: chatState.messages.length,
               onNewChat: () {
                 ref.read(chatProvider.notifier).startNewSession();
@@ -145,6 +146,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               onCrisis: () => context.push(AppRoutes.crisis),
               onToggleListenMode: () =>
                   setState(() => _justListenMode = !_justListenMode),
+              onToggleLocalModel: () =>
+                  ref.read(chatProvider.notifier).toggleLocalModel(),
               onNavigate: _showNavigationSheet,
             ),
 
@@ -207,6 +210,36 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ),
               ),
 
+            // In-house model banner
+            if (chatState.useLocalModel)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                color: const Color(0xFFF3F0FF),
+                child: Row(
+                  children: [
+                    const Icon(LucideIcons.cpu, size: 14, color: Color(0xFF7C3AED)),
+                    const SizedBox(width: 6),
+                    const Expanded(
+                      child: Text(
+                        'In-house model active — responses generated locally',
+                        style: TextStyle(
+                          fontFamily: 'Nunito',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF5B21B6),
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () =>
+                          ref.read(chatProvider.notifier).toggleLocalModel(),
+                      child: const Icon(LucideIcons.x, size: 14, color: Color(0xFF7C3AED)),
+                    ),
+                  ],
+                ),
+              ),
+
             // Quick reply chips (when not loading and has context)
             if (_showQuickReplies && !chatState.isMayaResponding)
               _QuickReplyChips(
@@ -234,19 +267,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 class _ChatHeader extends StatelessWidget {
   final MayaStreamState streamState;
   final bool justListenMode;
+  final bool useLocalModel;
   final int messageCount;
   final VoidCallback onNewChat;
   final VoidCallback onCrisis;
   final VoidCallback onToggleListenMode;
+  final VoidCallback onToggleLocalModel;
   final VoidCallback onNavigate;
 
   const _ChatHeader({
     required this.streamState,
     required this.justListenMode,
+    required this.useLocalModel,
     required this.messageCount,
     required this.onNewChat,
     required this.onCrisis,
     required this.onToggleListenMode,
+    required this.onToggleLocalModel,
     required this.onNavigate,
   });
 
@@ -382,17 +419,27 @@ class _ChatHeader extends StatelessWidget {
                     tooltip: 'Navigate',
                   ),
                   _HeaderBtn(
-                    icon: justListenMode
-                        ? LucideIcons.ear
-                        : LucideIcons.earOff,
-                    onTap: onToggleListenMode,
-                    tooltip: justListenMode
-                        ? 'Exit listen mode'
-                        : 'Just listen mode',
-                    color: justListenMode
-                        ? const Color(0xFFF59E0B)
+                    icon: LucideIcons.cpu,
+                    onTap: onToggleLocalModel,
+                    tooltip: useLocalModel
+                        ? 'Switch to Maya (cloud)'
+                        : 'Switch to in-house model',
+                    color: useLocalModel
+                        ? const Color(0xFF7C3AED)
                         : AppColors.textMuted,
                   ),
+                  // _HeaderBtn(
+                  //   icon: justListenMode
+                  //       ? LucideIcons.ear
+                  //       : LucideIcons.earOff,
+                  //   onTap: onToggleListenMode,
+                  //   tooltip: justListenMode
+                  //       ? 'Exit listen mode'
+                  //       : 'Just listen mode',
+                  //   color: justListenMode
+                  //       ? const Color(0xFFF59E0B)
+                  //       : AppColors.textMuted,
+                  // ),
                   _HeaderBtn(
                     icon: LucideIcons.squarePen,
                     onTap: onNewChat,

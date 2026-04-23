@@ -28,6 +28,7 @@ class ChatState {
   final List<ChatSessionModel> sessions;
   final List<String> recentSummaries;
   final bool isGeneratingOpening;
+  final bool useLocalModel;
 
   const ChatState({
     this.messages = const [],
@@ -41,6 +42,7 @@ class ChatState {
     this.sessions = const [],
     this.recentSummaries = const [],
     this.isGeneratingOpening = false,
+    this.useLocalModel = false,
   });
 
   bool get isMayaResponding =>
@@ -61,6 +63,7 @@ class ChatState {
     List<ChatSessionModel>? sessions,
     List<String>? recentSummaries,
     bool? isGeneratingOpening,
+    bool? useLocalModel,
   }) =>
       ChatState(
         messages: messages ?? this.messages,
@@ -76,6 +79,7 @@ class ChatState {
         sessions: sessions ?? this.sessions,
         recentSummaries: recentSummaries ?? this.recentSummaries,
         isGeneratingOpening: isGeneratingOpening ?? this.isGeneratingOpening,
+        useLocalModel: useLocalModel ?? this.useLocalModel,
       );
 }
 
@@ -85,6 +89,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
   static const _uuid = Uuid();
   static const _model = 'llama-3.3-70b-versatile';
   static const _groqUrl = 'https://api.groq.com/openai/v1/chat/completions';
+  static const _ollamaUrl = 'http://192.168.100.205:11434';
+  static const _ollamaModel = 'gemma3:1b';
 
   final Ref _ref;
   final http.Client _client = http.Client();
@@ -198,7 +204,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
   Future<void> sendMessage(String content) async {
     if (content.trim().isEmpty) return;
 
-    if (_apiKey.isEmpty) {
+    if (!state.useLocalModel && _apiKey.isEmpty) {
       state = state.copyWith(
         errorMessage: 'Groq API key not configured. Add GROQ_API_KEY to .env',
       );
@@ -247,11 +253,17 @@ class ChatNotifier extends StateNotifier<ChatState> {
     if (isCrisis) state = state.copyWith(crisisDetected: true);
 
     try {
-      final aiContent = await _callGroq(
-        history: history,
-        userContent: content.trim(),
-        systemPrompt: _buildSystemPrompt(),
-      );
+      final aiContent = state.useLocalModel
+          ? await _callOllama(
+              history: history,
+              userContent: content.trim(),
+              systemPrompt: _buildSystemPrompt(),
+            )
+          : await _callGroq(
+              history: history,
+              userContent: content.trim(),
+              systemPrompt: _buildSystemPrompt(),
+            );
       await _finalizeAIMessage(
           sessionId: sessionId, content: aiContent, isCrisis: isCrisis);
     } catch (e) {
@@ -265,11 +277,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
+  void toggleLocalModel() {
+    state = state.copyWith(useLocalModel: !state.useLocalModel);
+  }
+
   // ─── Opening message ──────────────────────────────────────────────────────
 
   /// Generates a warm, data-driven opening message from Maya using the
   /// user's real-time mood data, trend alerts, streak, and session history.
   Future<void> _sendOpeningMessage() async {
+    if (state.useLocalModel) return;
     if (_apiKey.isEmpty) return;
 
     final sessionId = state.currentSessionId;
@@ -520,6 +537,77 @@ class ChatNotifier extends StateNotifier<ChatState> {
     throw _GroqException(response.statusCode, detail);
   }
 
+  // ─── Ollama local model ───────────────────────────────────────────────────
+
+  Future<String> _callOllama({
+    required List<Map<String, dynamic>> history,
+    required String userContent,
+    required String systemPrompt,
+  }) async {
+    // Build a single prompt string: system + history + user turn.
+    final buffer = StringBuffer();
+    buffer.writeln('[System]\n$systemPrompt\n');
+    for (final msg in history) {
+      final role = msg['role'] == 'user' ? 'User' : 'Maya';
+      buffer.writeln('[$role]\n${msg['content']}\n');
+    }
+    buffer.write('[User]\n$userContent');
+
+    final request = http.Request(
+      'POST',
+      Uri.parse('$_ollamaUrl/api/generate'),
+    );
+    request.headers['Content-Type'] = 'application/json';
+    request.body = jsonEncode({
+      'model': _ollamaModel,
+      'prompt': buffer.toString(),
+      'stream': true,
+    });
+
+    http.StreamedResponse response;
+    try {
+      response = await _client.send(request);
+      print("RESPONSE: $response");
+    } catch (e) {
+      print("OLLAMA-ERROR: $e");
+      throw _OllamaException('Could not connect to the local model. Make sure Ollama is running on this network.');
+    }
+
+    if (response.statusCode != 200) {
+      final body = await response.stream.bytesToString();
+      throw _OllamaException('Ollama returned ${response.statusCode}: $body');
+    }
+
+    state = state.copyWith(
+      streamState: MayaStreamState.streaming,
+      streamingContent: '',
+    );
+
+    final fullResponse = StringBuffer();
+    await for (final chunk in response.stream.transform(utf8.decoder).transform(const LineSplitter())) {
+      print("CHUNK: $chunk");
+      if (chunk.trim().isEmpty) continue;
+      try {
+        final json = jsonDecode(chunk) as Map<String, dynamic>;
+        final token = json['response'] as String? ?? '';
+        if (token.isNotEmpty) {
+          fullResponse.write(token);
+          state = state.copyWith(
+            streamState: MayaStreamState.streaming,
+            streamingContent: fullResponse.toString(),
+          );
+        }
+        if (json['done'] == true) break;
+      } catch (_) {
+        // Skip malformed lines.
+      }
+    }
+
+    final result = fullResponse.toString().trim();
+    if (result.isEmpty) throw _OllamaException('Empty response from local model.');
+    return result;
+  }
+
   // ─── Finalise AI message ──────────────────────────────────────────────────
 
   Future<void> _finalizeAIMessage({
@@ -713,6 +801,7 @@ Crisis & safety:
   // ─── Error helpers ────────────────────────────────────────────────────────
 
   String _humanError(Object e) {
+    if (e is _OllamaException) return e.message;
     if (e is http.ClientException) return 'Network error — check your connection.';
     if (e is _GroqException) {
       final s = e.statusCode;
@@ -747,6 +836,11 @@ class _GroqException implements Exception {
   final int statusCode;
   final String detail;
   const _GroqException(this.statusCode, [this.detail = '']);
+}
+
+class _OllamaException implements Exception {
+  final String message;
+  const _OllamaException(this.message);
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
