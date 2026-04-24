@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/crisis_ml_service.dart';
 
 /// Three-tier crisis escalation system.
 enum CrisisTier {
@@ -32,6 +33,11 @@ class CrisisEscalationState {
   final DateTime? lastDetectionAt;
   final bool isSafeConfirmed;
   final List<String> triggeredKeywords;
+  /// Raw crisis probability from the ML model (0.0–1.0).
+  /// Null when the ML model is unavailable.
+  final double? mlCrisisScore;
+  /// How the last detection was triggered: 'keyword', 'ml', 'both', or 'none'.
+  final String detectionMethod;
 
   const CrisisEscalationState({
     this.currentTier = CrisisTier.none,
@@ -40,6 +46,8 @@ class CrisisEscalationState {
     this.lastDetectionAt,
     this.isSafeConfirmed = false,
     this.triggeredKeywords = const [],
+    this.mlCrisisScore,
+    this.detectionMethod = 'none',
   });
 
   CrisisEscalationState copyWith({
@@ -49,6 +57,8 @@ class CrisisEscalationState {
     DateTime? lastDetectionAt,
     bool? isSafeConfirmed,
     List<String>? triggeredKeywords,
+    double? mlCrisisScore,
+    String? detectionMethod,
   }) =>
       CrisisEscalationState(
         currentTier: currentTier ?? this.currentTier,
@@ -59,6 +69,8 @@ class CrisisEscalationState {
         lastDetectionAt: lastDetectionAt ?? this.lastDetectionAt,
         isSafeConfirmed: isSafeConfirmed ?? this.isSafeConfirmed,
         triggeredKeywords: triggeredKeywords ?? this.triggeredKeywords,
+        mlCrisisScore: mlCrisisScore ?? this.mlCrisisScore,
+        detectionMethod: detectionMethod ?? this.detectionMethod,
       );
 }
 
@@ -92,67 +104,93 @@ class CrisisEscalationNotifier
     'it\'s too late', 'goodbye forever',
   };
 
-  /// Analyze text for crisis keywords and escalate tier accordingly.
+  /// Analyse text for crisis signals using both keyword matching and the
+  /// on-device ML model.  The keyword scan runs synchronously; ML inference
+  /// runs in a background isolate (see [CrisisMlService]) and never blocks
+  /// the UI or the chat message stream.
+  ///
+  /// The final tier is always the *more severe* of the two signals — neither
+  /// can downgrade the other.
   Future<CrisisTier> analyzeText(String text) async {
+    print("----RUNNING ML INFERENCE-----");
+    print("INFERENCE ON: $text");
     final lower = text.toLowerCase();
-    final now = DateTime.now();
+    final now   = DateTime.now();
 
-    // Reset daily counts at midnight
-    final lastDetection = state.lastDetectionAt;
-    final isNewDay = lastDetection == null ||
-        lastDetection.day != now.day;
-
+    final isNewDay = state.lastDetectionAt == null ||
+        state.lastDetectionAt!.day != now.day;
     int t1Count = isNewDay ? 0 : state.tier1DetectionsToday;
     int t2Count = isNewDay ? 0 : state.tier2DetectionsToday;
 
-    // Check tier 3 first (highest priority)
-    final triggeredT3 =
-        _tier3Keywords.where((kw) => lower.contains(kw)).toList();
-    if (triggeredT3.isNotEmpty) {
-      await _escalateTo(
-        CrisisTier.tier3,
-        tier1Count: t1Count,
-        tier2Count: t2Count + 1,
-        keywords: triggeredT3,
-        now: now,
-      );
-      return CrisisTier.tier3;
-    }
+    // ── 1. Keyword scan (synchronous, always runs) ─────────────────────────
+    CrisisTier    keywordTier = CrisisTier.none;
+    List<String>  keywords    = [];
 
-    // Check tier 2
-    final triggeredT2 =
-        _tier2Keywords.where((kw) => lower.contains(kw)).toList();
-    if (triggeredT2.isNotEmpty) {
+    final t3 = _tier3Keywords.where((kw) => lower.contains(kw)).toList();
+    if (t3.isNotEmpty) {
+      keywordTier = CrisisTier.tier3;
+      keywords    = t3;
       t2Count++;
-      await _escalateTo(
-        CrisisTier.tier2,
-        tier1Count: t1Count,
-        tier2Count: t2Count,
-        keywords: triggeredT2,
-        now: now,
-      );
-      return CrisisTier.tier2;
+    } else {
+      final t2 = _tier2Keywords.where((kw) => lower.contains(kw)).toList();
+      if (t2.isNotEmpty) {
+        t2Count++;
+        keywordTier = CrisisTier.tier2;
+        keywords    = t2;
+      } else {
+        final t1 = _tier1Keywords.where((kw) => lower.contains(kw)).toList();
+        if (t1.isNotEmpty) {
+          t1Count++;
+          keywordTier = t1Count >= 2 ? CrisisTier.tier2 : CrisisTier.tier1;
+          keywords    = t1;
+          if (keywordTier == CrisisTier.tier2) t2Count++;
+        }
+      }
     }
 
-    // Check tier 1
-    final triggeredT1 =
-        _tier1Keywords.where((kw) => lower.contains(kw)).toList();
-    if (triggeredT1.isNotEmpty) {
-      t1Count++;
-
-      // Escalate to tier 2 if tier 1 detected 2+ times today
-      final newTier = t1Count >= 2 ? CrisisTier.tier2 : CrisisTier.tier1;
-      await _escalateTo(
-        newTier,
-        tier1Count: t1Count,
-        tier2Count: t2Count,
-        keywords: triggeredT1,
-        now: now,
-      );
-      return newTier;
+    // ── 2. ML scoring (async, background isolate — non-blocking) ──────────
+    double     mlCrisisProb = 0.0;
+    CrisisTier mlTier       = CrisisTier.none;
+    print("ML-RUNNING!");
+    final mlScore = await CrisisMlService.score(text);
+    if (mlScore.available) {
+      mlCrisisProb = mlScore.crisis;
+      if (mlScore.crisis >= CrisisMlService.tier3Min) {
+        mlTier = CrisisTier.tier3;
+      } else if (mlScore.crisis >= CrisisMlService.crisisMin) {
+        mlTier = CrisisTier.tier2;
+      } else if (mlScore.distress >= CrisisMlService.distressMin) {
+        mlTier = CrisisTier.tier1;
+      }
     }
 
-    return CrisisTier.none;
+    // ── 3. Take the more severe tier (invariant: never downgrade) ──────────
+    final finalTier =
+        mlTier.index > keywordTier.index ? mlTier : keywordTier;
+
+    final String detectionMethod;
+    if (keywordTier != CrisisTier.none && mlTier != CrisisTier.none) {
+      detectionMethod = 'both';
+    } else if (mlTier != CrisisTier.none) {
+      detectionMethod = 'ml';
+    } else if (keywordTier != CrisisTier.none) {
+      detectionMethod = 'keyword';
+    } else {
+      detectionMethod = 'none';
+    }
+    print("FINAL-TIER: $finalTier");
+    if (finalTier == CrisisTier.none) return CrisisTier.none;
+
+    await _escalateTo(
+      finalTier,
+      tier1Count:      t1Count,
+      tier2Count:      t2Count,
+      keywords:        keywords,
+      now:             now,
+      mlCrisisScore:   mlCrisisProb,
+      detectionMethod: detectionMethod,
+    );
+    return finalTier;
   }
 
   /// Escalate based on low mood entry (mood ≤ 3 = tier2, mood ≤ 2 = tier3).
@@ -214,20 +252,22 @@ class CrisisEscalationNotifier
     required int tier2Count,
     required List<String> keywords,
     required DateTime now,
+    double mlCrisisScore    = 0.0,
+    String detectionMethod  = 'keyword',
   }) async {
     // Never downgrade tier automatically (only confirmSafe/dismiss can lower it)
-    final newTier = tier.index > state.currentTier.index ? tier : state.currentTier;
+    final newTier =
+        tier.index > state.currentTier.index ? tier : state.currentTier;
 
     state = state.copyWith(
-      currentTier: newTier,
+      currentTier:          newTier,
       tier1DetectionsToday: tier1Count,
       tier2DetectionsToday: tier2Count,
-      lastDetectionAt: now,
-      isSafeConfirmed: false,
-      triggeredKeywords: [
-        ...state.triggeredKeywords,
-        ...keywords,
-      ],
+      lastDetectionAt:      now,
+      isSafeConfirmed:      false,
+      triggeredKeywords:    [...state.triggeredKeywords, ...keywords],
+      mlCrisisScore:        mlCrisisScore > 0 ? mlCrisisScore : null,
+      detectionMethod:      detectionMethod,
     );
     await _persistState();
   }

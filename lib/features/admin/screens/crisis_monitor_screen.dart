@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/crisis_ml_service.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../providers/admin_provider.dart';
 
@@ -81,6 +82,8 @@ class _Case {
   final DateTime createdAt;
   _Status status;
   double riskScore;
+  /// ML model crisis probability (0.0–1.0). Null until background scoring completes.
+  double? mlScore;
   String? assignedTo;
   String? escalationTarget;
   DateTime? acknowledgedAt;
@@ -101,6 +104,7 @@ class _Case {
     required this.createdAt,
     this.status = _Status.newCase,
     this.riskScore = 0,
+    this.mlScore,
     this.assignedTo,
     this.escalationTarget,
     this.acknowledgedAt,
@@ -402,8 +406,25 @@ class _State extends ConsumerState<CrisisMonitorScreen>
         _loading = false;
         _newAlerts = 0;
       });
+
+      // Score top 50 active cases with the ML model in the background.
+      // Updates roll in one-by-one as each inference completes (~15 ms each).
+      _scoreWithMl(entries.where((c) => c.isActive).take(50).toList());
     } catch (_) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Runs ML inference on [cases] sequentially in the background isolate.
+  /// Each result triggers a micro setState so the badge appears progressively.
+  Future<void> _scoreWithMl(List<_Case> cases) async {
+    if (!CrisisMlService.isAvailable) return;
+    for (final c in cases) {
+      if (!mounted) return;
+      final score = await CrisisMlService.score(c.content);
+      if (score.available && mounted) {
+        setState(() => c.mlScore = score.crisis);
+      }
     }
   }
 
@@ -1162,6 +1183,25 @@ class _CrisisCard extends StatelessWidget {
                 const SizedBox(width: 5),
                 const Icon(LucideIcons.flag, size: 11, color: AppColors.error),
               ],
+              // ML score badge — appears once background scoring completes
+              if (c.mlScore != null) ...[
+                const SizedBox(width: 5),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF7C3AED).withValues(alpha: 0.12),
+                    borderRadius: AppRadius.smAll,
+                  ),
+                  child: Text(
+                    'ML ${(c.mlScore! * 100).toInt()}%',
+                    style: const TextStyle(
+                      fontSize: 9,
+                      color: Color(0xFF7C3AED),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
               const Spacer(),
               // Risk score
               Container(
@@ -1499,6 +1539,11 @@ class _CaseDetailPanelState extends State<_CaseDetailPanel> {
                       const SizedBox(height: 5),
                       Wrap(spacing: 6, children: [
                         _InfoPill(label: 'Risk: ${c.riskScore.toInt()}', color: _riskColor(c.riskScore)),
+                        if (c.mlScore != null)
+                          _InfoPill(
+                            label: 'ML Crisis: ${(c.mlScore! * 100).toInt()}%',
+                            color: const Color(0xFF7C3AED),
+                          ),
                         if (history.isNotEmpty) _InfoPill(label: '${history.length} prior', color: AppColors.error),
                         if (c.escalationTarget != null) _InfoPill(label: 'Escalated: ${c.escalationTarget}', color: const Color(0xFF7C3AED)),
                       ]),

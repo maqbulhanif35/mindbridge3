@@ -4,6 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
+import 'core/services/crisis_ml_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +22,10 @@ void main() async {
       systemNavigationBarColor: Colors.transparent,
     ),
   );
+
+  // Initialize on-device ML crisis scorer (non-blocking: falls back to
+  // keyword-only mode if the model asset is not yet present).
+  await CrisisMlService.initialize();
 
   // Initialize Supabase
   await Supabase.initialize(
