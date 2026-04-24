@@ -90,7 +90,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
   static const _model = 'llama-3.3-70b-versatile';
   static const _groqUrl = 'https://api.groq.com/openai/v1/chat/completions';
   static const _ollamaUrl = 'http://192.168.100.205:11434';
-  static const _ollamaModel = 'gemma3:1b';
+  static const _ollamaModel = 'llama3:8b';
 
   final Ref _ref;
   final http.Client _client = http.Client();
@@ -257,7 +257,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
           ? await _callOllama(
               history: history,
               userContent: content.trim(),
-              systemPrompt: _buildSystemPrompt(),
+              systemPrompt: _buildLocalSystemPrompt(),
             )
           : await _callGroq(
               history: history,
@@ -562,6 +562,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       'model': _ollamaModel,
       'prompt': buffer.toString(),
       'stream': true,
+      "think":false,
     });
 
     http.StreamedResponse response;
@@ -793,9 +794,43 @@ Language:
 - Never insert Swahili phrases into English responses — it feels forced and unprofessional
 
 Crisis & safety:
-- For any mention of self-harm or crisis → refer to Befrienders Kenya: 0800 723 253 (free, 24/7) or Mathare Hospital: +254 20 2723200 or campus counseling unit
+- For any mention of self-harm or crisis → refer to Befrienders Kenya: +254 722 178177 (free, 24/7) or Mathare Hospital: +254 20 2723200 or campus counseling unit
 - You are NOT a licensed therapist — recommend professionals when appropriate
 - Do not mention Groq, LLaMA, or any underlying model — you are Maya''';
+  }
+
+  // ─── Local system prompt (compact — preserves context window) ────────────
+
+  String _buildLocalSystemPrompt() {
+    final hour = DateTime.now().hour;
+    final timeOfDay =
+        hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+
+    final moodState  = _ref.read(moodProvider);
+    final authState  = _ref.read(authProvider);
+    final user       = authState.user;
+    final userName   = user?.preferredName ?? user?.name.split(' ').first ?? '';
+    final todayEntry = moodState.todayEntry;
+
+    final ctx = <String>[];
+    if (userName.isNotEmpty) ctx.add('User: $userName');
+    if (todayEntry != null) {
+      ctx.add('Mood today: ${todayEntry.moodScore}/10 — ${todayEntry.moodLabel}');
+    }
+
+    final contextLine = ctx.isNotEmpty ? '\n${ctx.join(' | ')}' : '';
+
+    return 'You are Maya, a mental wellness companion for university students in Kenya. '
+        'It is $timeOfDay.$contextLine\n\n'
+        'Your job: listen, empathise, and support using CBT and mindfulness. '
+        'You are NOT a therapist — suggest professional help when needed.\n\n'
+        'Rules:\n'
+        '- 2–3 sentence replies unless the topic needs depth\n'
+        '- Empathise before advising\n'
+        '- Address what the user actually said — no generic comfort\n'
+        '- Never open with filler ("Of course!", "Absolutely!", "Great!")\n'
+        '- Crisis → Befrienders Kenya 0800 723 253 (free 24/7) or campus counselling\n'
+        '- Respond in English. You are Maya — never reveal an underlying AI model.';
   }
 
   // ─── Error helpers ────────────────────────────────────────────────────────
