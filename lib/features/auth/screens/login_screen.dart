@@ -268,25 +268,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                 const SizedBox(height: 22),
 
-                // Social buttons
-                _SocialButton(
-                  icon: FontAwesomeIcons.google,
-                  iconColor: const Color(0xFF4285F4),
-                  iconBg: const Color(0xFFEBF1FF),
-                  label: 'Continue with Google',
-                  isLoading: _googleLoading,
-                  onTap: _googleLoading ? null : _signInWithGoogle,
-                ).animate().fadeIn(delay: 130.ms).slideY(begin: 0.2),
-
-                const SizedBox(height: 9),
-
-                _SocialButton(
-                  icon: FontAwesomeIcons.apple,
-                  iconColor: Colors.white,
-                  iconBg: const Color(0xFF1D1D1F),
-                  label: 'Continue with Apple',
-                  onTap: () => _showComingSoon('Apple'),
-                ).animate().fadeIn(delay: 170.ms).slideY(begin: 0.2),
 
                 const SizedBox(height: 18),
 
