@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -12,6 +14,7 @@ import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/mood_provider.dart';
 import '../../../core/providers/streak_provider.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/email_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/theme/design_tokens.dart';
 
@@ -2588,81 +2591,482 @@ void _showChangePasswordSheet(BuildContext context, WidgetRef ref) {
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    builder: (_) => _ChangePasswordSheet(ref: ref, parentContext: context),
+  );
+}
+
+class _ChangePasswordSheet extends StatefulWidget {
+  final WidgetRef ref;
+  final BuildContext parentContext;
+  const _ChangePasswordSheet({required this.ref, required this.parentContext});
+
+  @override
+  State<_ChangePasswordSheet> createState() => _ChangePasswordSheetState();
+}
+
+class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
+  static const _codeLength = 6;
+
+  int _step = 1; // 1 = credentials form, 2 = OTP entry
+  bool _loading = false;
+  String? _error;
+
+  // Step 1
+  final _oldCtrl = TextEditingController();
+  final _newCtrl = TextEditingController();
+  final _confirmCtrl = TextEditingController();
+  bool _showOld = false;
+  bool _showNew = false;
+  bool _showConfirm = false;
+
+  // Step 2
+  final _otpCtrls = List.generate(_codeLength, (_) => TextEditingController());
+  final _otpFocus = List.generate(_codeLength, (_) => FocusNode());
+  String? _generatedCode;
+  DateTime? _codeExpiry;
+  bool _resending = false;
+
+  @override
+  void dispose() {
+    _oldCtrl.dispose();
+    _newCtrl.dispose();
+    _confirmCtrl.dispose();
+    for (final c in _otpCtrls) c.dispose();
+    for (final f in _otpFocus) f.dispose();
+    super.dispose();
+  }
+
+  String _makeCode() =>
+      (100000 + Random.secure().nextInt(900000)).toString();
+
+  Future<void> _sendCode() async {
+    final old = _oldCtrl.text.trim();
+    final newP = _newCtrl.text;
+    final confirm = _confirmCtrl.text;
+
+    if (old.isEmpty || newP.isEmpty || confirm.isEmpty) {
+      setState(() => _error = 'Please fill in all fields.');
+      return;
+    }
+    if (newP != confirm) {
+      setState(() => _error = 'New passwords do not match.');
+      return;
+    }
+    if (newP.length < 8) {
+      setState(() => _error = 'Password must be at least 8 characters.');
+      return;
+    }
+    if (old == newP) {
+      setState(() => _error = 'New password must differ from your current password.');
+      return;
+    }
+
+    setState(() { _loading = true; _error = null; });
+
+    final user = widget.ref.read(currentUserProvider);
+    if (user == null) { setState(() => _loading = false); return; }
+
+    // Verify current password by re-authenticating
+    try {
+      await SupabaseService.signIn(email: user.email, password: old);
+    } catch (_) {
+      setState(() { _loading = false; _error = 'Current password is incorrect.'; });
+      return;
+    }
+
+    await _dispatchCode(user.email, user.displayName);
+  }
+
+  Future<void> _dispatchCode(String email, String name) async {
+    final code = _makeCode();
+    _generatedCode = code;
+    _codeExpiry = DateTime.now().add(const Duration(minutes: 10));
+
+    await EmailService.sendOtp(
+      toEmail: email,
+      name: name,
+      code: code,
+      type: 'reset',
+    );
+
+    if (!mounted) return;
+    setState(() { _loading = false; _resending = false; _step = 2; });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _otpFocus[0].requestFocus();
+    });
+  }
+
+  Future<void> _resendCode() async {
+    final user = widget.ref.read(currentUserProvider);
+    if (user == null) return;
+    setState(() { _resending = true; _error = null; });
+    for (final c in _otpCtrls) c.clear();
+    await _dispatchCode(user.email, user.displayName);
+  }
+
+  Future<void> _verifyAndChange() async {
+    final entered = _otpCtrls.map((c) => c.text).join();
+    if (entered.length != _codeLength) {
+      setState(() => _error = 'Please enter the complete 6-digit code.');
+      return;
+    }
+    if (_codeExpiry != null && DateTime.now().isAfter(_codeExpiry!)) {
+      setState(() => _error = 'Code has expired. Tap Resend to get a new one.');
+      return;
+    }
+    if (entered != _generatedCode) {
+      setState(() => _error = 'Incorrect code. Please try again.');
+      return;
+    }
+
+    setState(() { _loading = true; _error = null; });
+
+    try {
+      await SupabaseService.updatePassword(_newCtrl.text);
+      if (mounted) Navigator.pop(context);
+      final pc = widget.parentContext;
+      if (pc.mounted) {
+        ScaffoldMessenger.of(pc).showSnackBar(
+          SnackBar(
+            content: const Text('Password changed successfully.'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (_) {
+      setState(() {
+        _loading = false;
+        _error = 'Failed to update password. Please try again.';
+      });
+    }
+  }
+
+  void _onOtpChanged(String value, int index) {
+    if (value.length == 1 && index < _codeLength - 1) {
+      _otpFocus[index + 1].requestFocus();
+    } else if (value.isEmpty && index > 0) {
+      _otpFocus[index - 1].requestFocus();
+    }
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 150),
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        child: _step == 1 ? _buildForm() : _buildOtp(),
       ),
-      padding: EdgeInsets.fromLTRB(
-          20, 16, 20, MediaQuery.of(ctx).viewInsets.bottom + 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sheetHandle(),
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                  color: const Color(0xFFFF8C42).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10)),
-              child: const Icon(LucideIcons.keyRound, size: 16, color: Color(0xFFFF8C42)),
-            ),
-            const SizedBox(width: 10),
-            const Text('Change Password',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-          ]),
-          const SizedBox(height: 16),
+    );
+  }
+
+  // ── Step 1: credential form ─────────────────────────────
+
+  Widget _buildForm() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sheetHandle(),
+        Row(children: [
           Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF8C42).withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(LucideIcons.keyRound,
+                size: 16, color: Color(0xFFFF8C42)),
+          ),
+          const SizedBox(width: 10),
+          const Text('Change Password',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        ]),
+        const SizedBox(height: 20),
+        _pwField(
+          controller: _oldCtrl,
+          label: 'Current Password',
+          hint: 'Enter your current password',
+          show: _showOld,
+          onToggle: () => setState(() => _showOld = !_showOld),
+          autofocus: true,
+        ),
+        const SizedBox(height: 12),
+        _pwField(
+          controller: _newCtrl,
+          label: 'New Password',
+          hint: 'At least 8 characters',
+          show: _showNew,
+          onToggle: () => setState(() => _showNew = !_showNew),
+        ),
+        const SizedBox(height: 12),
+        _pwField(
+          controller: _confirmCtrl,
+          label: 'Confirm New Password',
+          hint: 'Repeat new password',
+          show: _showConfirm,
+          onToggle: () => setState(() => _showConfirm = !_showConfirm),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 10),
+          _errorBanner(_error!),
+        ],
+        const SizedBox(height: 20),
+        _actionButton(
+          label: 'Send Verification Code',
+          loading: _loading,
+          color: const Color(0xFFFF8C42),
+          onPressed: _sendCode,
+        ),
+      ],
+    );
+  }
+
+  // ── Step 2: OTP entry ───────────────────────────────────
+
+  Widget _buildOtp() {
+    final user = widget.ref.read(currentUserProvider);
+    final email = user?.email ?? '';
+    final codeComplete =
+        _otpCtrls.every((c) => c.text.isNotEmpty);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sheetHandle(),
+        Row(children: [
+          Container(
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: AppColors.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: const Row(children: [
-              Icon(LucideIcons.info, size: 14, color: AppColors.primary),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'A password reset link will be sent to your registered email address.',
-                  style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.primaryDark,
-                      height: 1.4),
-                ),
-              ),
-            ]),
+            child: const Icon(LucideIcons.mailCheck,
+                size: 16, color: AppColors.primary),
           ),
-          const SizedBox(height: 20),
-          _saveButton(
-            context: ctx,
-            label: 'Send Reset Link',
-            color: const Color(0xFFFF8C42),
-            onPressed: () async {
-              final user = ref.read(currentUserProvider);
-              if (user != null) {
-                try {
-                  await SupabaseService.sendPasswordReset(user.email);
-                } catch (_) {}
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Reset link sent to ${user.email}'),
-                      backgroundColor: AppColors.primary,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
-                  );
-                }
-              }
-            },
-          ),
+          const SizedBox(width: 10),
+          const Text('Enter Verification Code',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        ]),
+        const SizedBox(height: 12),
+        Text(
+          'A 6-digit code was sent to $email.\nIt expires in 10 minutes.',
+          style: TextStyle(
+              fontSize: 13, color: AppColors.textMuted, height: 1.5),
+        ),
+        const SizedBox(height: 24),
+        // OTP boxes
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: List.generate(_codeLength, (i) => _otpBox(i)),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 10),
+          _errorBanner(_error!),
         ],
+        const SizedBox(height: 20),
+        _actionButton(
+          label: 'Verify & Change Password',
+          loading: _loading,
+          color: AppColors.primary,
+          onPressed: codeComplete ? _verifyAndChange : null,
+        ),
+        const SizedBox(height: 12),
+        Center(
+          child: TextButton(
+            onPressed: _resending ? null : _resendCode,
+            child: _resending
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : Text(
+                    'Resend Code',
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── OTP single-digit box ────────────────────────────────
+
+  Widget _otpBox(int i) {
+    final filled = _otpCtrls[i].text.isNotEmpty;
+    final hasError = _error != null && _error!.startsWith('Incorrect');
+    return SizedBox(
+      width: 44,
+      height: 54,
+      child: KeyboardListener(
+        focusNode: FocusNode(),
+        onKeyEvent: (event) {
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.backspace &&
+              _otpCtrls[i].text.isEmpty &&
+              i > 0) {
+            _otpFocus[i - 1].requestFocus();
+          }
+        },
+        child: TextField(
+          controller: _otpCtrls[i],
+          focusNode: _otpFocus[i],
+          textAlign: TextAlign.center,
+          keyboardType: TextInputType.number,
+          maxLength: 1,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            color: filled ? AppColors.primary : AppColors.textPrimary,
+          ),
+          decoration: InputDecoration(
+            counterText: '',
+            filled: true,
+            fillColor: filled
+                ? AppColors.primaryContainer
+                : AppColors.surfaceVariant,
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: hasError
+                    ? Colors.red.withOpacity(0.5)
+                    : filled
+                        ? AppColors.primary.withOpacity(0.5)
+                        : AppColors.border,
+                width: filled ? 1.5 : 1,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: hasError ? Colors.red : AppColors.primary,
+                width: 2,
+              ),
+            ),
+          ),
+          onChanged: (v) => _onOtpChanged(v, i),
+        ),
       ),
-    ),
-  );
+    );
+  }
+
+  // ── Helpers ─────────────────────────────────────────────
+
+  Widget _pwField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required bool show,
+    required VoidCallback onToggle,
+    bool autofocus = false,
+  }) =>
+      TextField(
+        controller: controller,
+        obscureText: !show,
+        autofocus: autofocus,
+        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          prefixIcon: const Icon(LucideIcons.lock,
+              size: 18, color: AppColors.textMuted),
+          suffixIcon: IconButton(
+            icon: Icon(
+              show ? LucideIcons.eyeOff : LucideIcons.eye,
+              size: 18,
+              color: AppColors.textMuted,
+            ),
+            onPressed: onToggle,
+          ),
+          filled: true,
+          fillColor: AppColors.surfaceVariant,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide:
+                const BorderSide(color: AppColors.border, width: 1),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide:
+                const BorderSide(color: AppColors.primary, width: 1.5),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16, vertical: 14),
+        ),
+      );
+
+  Widget _errorBanner(String msg) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.error.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.error.withOpacity(0.25)),
+        ),
+        child: Row(children: [
+          const Icon(LucideIcons.circleAlert,
+              size: 14, color: AppColors.error),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(msg,
+                style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.error,
+                    height: 1.3)),
+          ),
+        ]),
+      );
+
+  Widget _actionButton({
+    required String label,
+    required bool loading,
+    required Color color,
+    required VoidCallback? onPressed,
+  }) =>
+      SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: ElevatedButton(
+          onPressed: loading ? null : onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: color,
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: color.withOpacity(0.4),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14)),
+            elevation: 0,
+          ),
+          child: loading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 2.5))
+              : Text(label,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w700)),
+        ),
+      );
 }
 
 // ─── Shared Sheet TextField ────────────────────────────────
