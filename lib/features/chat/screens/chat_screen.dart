@@ -649,7 +649,7 @@ class _MessageBubble extends StatelessWidget {
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
                     maxWidth:
-                        MediaQuery.of(context).size.width * (isUser ? 0.72 : 0.80),
+                        MediaQuery.of(context).size.width * (isUser ? 0.72 : 0.72),
                   ),
                   child: isUser
                       ? Container(
@@ -684,7 +684,7 @@ class _MessageBubble extends StatelessWidget {
                       : Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 12),
-                          decoration: BoxDecoration(
+                          decoration: const BoxDecoration(
                             color: Colors.white,
                             borderRadius: const BorderRadius.only(
                               topLeft: Radius.circular(4),

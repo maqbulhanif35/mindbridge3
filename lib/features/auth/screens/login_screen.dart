@@ -217,11 +217,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 // Header row
                 Row(
                   children: [
-                    Expanded(
+                    const Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                           Text(
                             'Welcome back 👋',
                             style: TextStyle(
                               fontSize: 22,
@@ -230,7 +230,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               letterSpacing: -0.4,
                             ),
                           ),
-                          const SizedBox(height: 3),
+                           SizedBox(height: 3),
                           Text(
                             'Sign in to your wellness space',
                             style: TextStyle(
@@ -246,7 +246,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         color: AppColors.successContainer,
                         borderRadius: BorderRadius.circular(50),
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.verified_user_rounded,
@@ -278,10 +278,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         child: Divider(
                             color: AppColors.border.withValues(alpha: 0.7),
                             height: 1)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                    const Padding(
+                      padding:  EdgeInsets.symmetric(horizontal: 12),
                       child: Text(
-                        'or continue with email',
+                        'Continue with email',
                         style: TextStyle(
                             color: AppColors.textMuted, fontSize: 11),
                       ),

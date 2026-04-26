@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -10,15 +11,52 @@ import '../../../shared/widgets/custom_button.dart';
 class CrisisScreen extends StatelessWidget {
   const CrisisScreen({super.key});
 
-  Future<void> _call(String number) async {
-    final uri = Uri.parse('tel:$number');
+  bool _isDesktop() {
+    if (kIsWeb) return true;
+    return defaultTargetPlatform == TargetPlatform.linux ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+  }
+
+  Future<void> _copyToClipboard(String number, BuildContext context) async {
+    await Clipboard.setData(ClipboardData(text: number));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '$number copied to clipboard',
+            style: const TextStyle(fontFamily: 'Nunito', color: Colors.white),
+          ),
+          backgroundColor: const Color(0xFF1E2D2B),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
+
+  Future<void> _call(String number, BuildContext context) async {
+    if (_isDesktop()) {
+      await _copyToClipboard(number, context);
+      return;
+    }
+    final cleanNumber = number.replaceAll(RegExp(r'\s+|-|\(|\)'), '');
+    print("REDIRECT-TO-PHONE-APP: $cleanNumber");
+    final uri = Uri(scheme: "tel",path:cleanNumber);
+    print("CAN-LAUNCH: ${await canLaunchUrl(uri)}");
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     }
   }
 
-  Future<void> _text(String number) async {
-    final uri = Uri.parse('sms:$number');
+  Future<void> _text(String number, BuildContext context) async {
+    if (_isDesktop()) {
+      await _copyToClipboard(number, context);
+      return;
+    }
+    final cleanNumber = number.replaceAll(RegExp(r'\s+|-|\(|\)'), '');
+    print("REDIRECT-TO-MESSAGING-APP: $cleanNumber");
+    final uri = Uri(scheme:"smsto",path:cleanNumber);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     }
@@ -105,14 +143,16 @@ class CrisisScreen extends StatelessWidget {
             // ─── SOS Button (Big) ──────────────────────
             Center(
               child: SosButton(
-                onTap: () => _call('988'),
+                onTap: () => _call('988', context),
               ),
             ).animate().scale(delay: 300.ms, curve: Curves.elasticOut),
 
             const SizedBox(height: 8),
 
             Text(
-              'Tap SOS to call 988 Suicide & Crisis Lifeline',
+              _isDesktop()
+                  ? 'Tap SOS to copy 988 to clipboard'
+                  : 'Tap SOS to call 988 Suicide & Crisis Lifeline',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: 'Nunito',
@@ -124,7 +164,7 @@ class CrisisScreen extends StatelessWidget {
             const SizedBox(height: 32),
 
             // ─── Crisis Contacts ───────────────────────
-            Text(
+            const Text(
               'IMMEDIATE HELP',
               style: TextStyle(
                 fontFamily: 'Nunito',
@@ -144,9 +184,9 @@ class CrisisScreen extends StatelessWidget {
                 number: contact['number']!,
                 description: contact['description']!,
                 type: contact['type']!,
-                onCall: () => _call(contact['number']!),
+                onCall: () => _call(contact['number']!, context),
                 onText: contact['type'] == 'text'
-                    ? () => _text(contact['number']!)
+                    ? () => _text(contact['number']!, context)
                     : null,
               )
                   .animate()
