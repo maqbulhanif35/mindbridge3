@@ -68,13 +68,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ];
     }
     final content = last.content.toLowerCase();
-    if (content.contains('breath') || content.contains('exercise') || content.contains('practice')) {
-      return ["Try it now", "Not right now", "Tell me more", "That sounds helpful"];
+    if (content.contains('breath') ||
+        content.contains('exercise') ||
+        content.contains('practice')) {
+      return [
+        "Try it now",
+        "Not right now",
+        "Tell me more",
+        "That sounds helpful"
+      ];
     }
-    if (content.contains('journal') || content.contains('write') || content.contains('reflect')) {
-      return ["I'll try journaling", "Help me start", "Tell me more", "Not right now"];
+    if (content.contains('journal') ||
+        content.contains('write') ||
+        content.contains('reflect')) {
+      return [
+        "I'll try journaling",
+        "Help me start",
+        "Tell me more",
+        "Not right now"
+      ];
     }
-    return ["That helps, thanks 💚", "Tell me more", "I need more support", "Let's try something"];
+    return [
+      "That helps, thanks 💚",
+      "Tell me more",
+      "I need more support",
+      "Let's try something"
+    ];
   }
 
   void _showNavigationSheet() {
@@ -104,7 +123,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         : text;
     // Record chat streak on first message of the day
     final streakState = ref.read(streakProvider);
-    if (!(streakState.streak(StreakType.chatSession)?.completedToday ?? false)) {
+    if (!(streakState.streak(StreakType.chatSession)?.completedToday ??
+        false)) {
       ref.read(streakProvider.notifier).recordActivity(StreakType.chatSession);
     }
     await ref.read(chatProvider.notifier).sendMessage(finalText);
@@ -126,7 +146,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
 
     final quickReplies = _getQuickReplies(chatState.messages);
-    final hasMessages = chatState.messages.isNotEmpty || chatState.streamingContent != null;
+    final hasMessages =
+        chatState.messages.isNotEmpty || chatState.streamingContent != null;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -168,8 +189,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   : _MessageList(
                       chatState: chatState,
                       scrollController: _scroll,
-                      onExerciseTap: () =>
-                          context.push(AppRoutes.breathing),
+                      onExerciseTap: () => context.push(AppRoutes.breathing),
                     ),
             ),
 
@@ -177,19 +197,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             if (chatState.errorMessage != null)
               _ErrorBanner(
                 message: chatState.errorMessage!,
-                onDismiss: () =>
-                    ref.read(chatProvider.notifier).clearError(),
+                onDismiss: () => ref.read(chatProvider.notifier).clearError(),
               ),
 
             // Just-listen mode banner
             if (_justListenMode)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 color: AppColors.primaryContainer,
                 child: Row(
                   children: [
-                    const Icon(LucideIcons.ear, size: 14, color: AppColors.primary),
+                    const Icon(LucideIcons.ear,
+                        size: 14, color: AppColors.primary),
                     const SizedBox(width: 6),
                     const Expanded(
                       child: Text(
@@ -204,7 +225,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ),
                     GestureDetector(
                       onTap: () => setState(() => _justListenMode = false),
-                      child: const Icon(LucideIcons.x, size: 14, color: AppColors.primary),
+                      child: const Icon(LucideIcons.x,
+                          size: 14, color: AppColors.primary),
                     ),
                   ],
                 ),
@@ -214,11 +236,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             if (chatState.useLocalModel)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 color: const Color(0xFFF3F0FF),
                 child: Row(
                   children: [
-                    const Icon(LucideIcons.cpu, size: 14, color: Color(0xFF7C3AED)),
+                    const Icon(LucideIcons.cpu,
+                        size: 14, color: Color(0xFF7C3AED)),
                     const SizedBox(width: 6),
                     const Expanded(
                       child: Text(
@@ -234,7 +258,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     GestureDetector(
                       onTap: () =>
                           ref.read(chatProvider.notifier).toggleLocalModel(),
-                      child: const Icon(LucideIcons.x, size: 14, color: Color(0xFF7C3AED)),
+                      child: const Icon(LucideIcons.x,
+                          size: 14, color: Color(0xFF7C3AED)),
                     ),
                   ],
                 ),
@@ -318,15 +343,8 @@ class _ChatHeader extends StatelessWidget {
                       Container(
                         width: 40,
                         height: 40,
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Color(0xFF009E95),
-                              AppColors.primary,
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
                           shape: BoxShape.circle,
                         ),
                         child: const Center(
@@ -351,8 +369,7 @@ class _ChatHeader extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: _statusColor,
                             shape: BoxShape.circle,
-                            border:
-                                Border.all(color: Colors.white, width: 2),
+                            border: Border.all(color: Colors.white, width: 2),
                           ),
                         ),
                       ),
@@ -483,8 +500,7 @@ class _HeaderBtn extends StatelessWidget {
         onPressed: onTap,
         icon: Icon(icon, color: color, size: 20),
         padding: const EdgeInsets.all(8),
-        constraints:
-            const BoxConstraints(minWidth: 38, minHeight: 38),
+        constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
         splashRadius: 20,
       ),
     );
@@ -512,11 +528,9 @@ class _MessageList extends StatelessWidget {
 
     // Total items: messages + (streaming bubble or thinking indicator)
     final showStreamingBubble = streamingContent != null;
-    final showThinkingBubble =
-        isThinking && !showStreamingBubble;
+    final showThinkingBubble = isThinking && !showStreamingBubble;
 
-    final extraItems =
-        (showStreamingBubble || showThinkingBubble) ? 1 : 0;
+    final extraItems = (showStreamingBubble || showThinkingBubble) ? 1 : 0;
 
     return ListView.builder(
       controller: scrollController,
@@ -562,9 +576,12 @@ class _MessageBubble extends StatelessWidget {
   bool get _suggestsExercise {
     final c = message.content.toLowerCase();
     return !message.isFromUser &&
-        (c.contains('breath') || c.contains('box breathing') ||
-            c.contains('4-7-8') || c.contains('mindful') ||
-            c.contains('try this exercise') || c.contains('calming technique'));
+        (c.contains('breath') ||
+            c.contains('box breathing') ||
+            c.contains('4-7-8') ||
+            c.contains('mindful') ||
+            c.contains('try this exercise') ||
+            c.contains('calming technique'));
   }
 
   @override
@@ -607,15 +624,11 @@ class _MessageBubble extends StatelessWidget {
                       ? Container(
                           width: 36,
                           height: 36,
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Color(0xFF009E95), AppColors.primary],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
                             shape: BoxShape.circle,
                           ),
-                          child: const Center(
+                          child: Center(
                             child: Text(
                               'M',
                               style: TextStyle(
@@ -634,8 +647,7 @@ class _MessageBubble extends StatelessWidget {
               GestureDetector(
                 onLongPress: () {
                   HapticFeedback.mediumImpact();
-                  Clipboard.setData(
-                      ClipboardData(text: message.content));
+                  Clipboard.setData(ClipboardData(text: message.content));
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: const Text('Copied to clipboard'),
@@ -648,8 +660,8 @@ class _MessageBubble extends StatelessWidget {
                 },
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxWidth:
-                        MediaQuery.of(context).size.width * (isUser ? 0.72 : 0.72),
+                    maxWidth: MediaQuery.of(context).size.width *
+                        (isUser ? 0.72 : 0.72),
                   ),
                   child: isUser
                       ? Container(
@@ -707,10 +719,7 @@ class _MessageBubble extends StatelessWidget {
               )
                   .animate()
                   .fadeIn(duration: 250.ms)
-                  .slideY(
-                      begin: 0.1,
-                      end: 0,
-                      curve: Curves.easeOutCubic),
+                  .slideY(begin: 0.1, end: 0, curve: Curves.easeOutCubic),
             ],
           ),
 
@@ -836,15 +845,11 @@ class _StreamingBubble extends StatelessWidget {
             child: Container(
               width: 36,
               height: 36,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF009E95), AppColors.primary],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
                 shape: BoxShape.circle,
               ),
-              child: const Center(
+              child: Center(
                 child: Text(
                   'M',
                   style: TextStyle(
@@ -864,8 +869,8 @@ class _StreamingBubble extends StatelessWidget {
                 maxWidth: MediaQuery.of(context).size.width * 0.80,
               ),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: const BorderRadius.only(
@@ -891,8 +896,7 @@ class _StreamingBubble extends StatelessWidget {
                     Container(
                       width: 2,
                       height: 14,
-                      decoration: const BoxDecoration(
-                          color: AppColors.primary),
+                      decoration: const BoxDecoration(color: AppColors.primary),
                     )
                         .animate(onPlay: (c) => c.repeat())
                         .fadeIn(duration: 500.ms)
@@ -950,15 +954,11 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator>
             child: Container(
               width: 36,
               height: 36,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF009E95), AppColors.primary],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
                 shape: BoxShape.circle,
               ),
-              child: const Center(
+              child: Center(
                 child: Text(
                   'M',
                   style: TextStyle(
@@ -994,12 +994,10 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator>
                 mainAxisSize: MainAxisSize.min,
                 children: List.generate(3, (i) {
                   final delay = i * 0.33;
-                  final progress =
-                      (_ctrl.value - delay).clamp(0.0, 1.0);
-                  final opacity = (progress < 0.5
-                          ? progress * 2
-                          : (1 - progress) * 2)
-                      .clamp(0.3, 1.0);
+                  final progress = (_ctrl.value - delay).clamp(0.0, 1.0);
+                  final opacity =
+                      (progress < 0.5 ? progress * 2 : (1 - progress) * 2)
+                          .clamp(0.3, 1.0);
                   return Container(
                     width: 8,
                     height: 8,
@@ -1043,24 +1041,13 @@ class _EmptyState extends StatelessWidget {
         children: [
           // Avatar
           Container(
-            width: 72,
-            height: 72,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF009E95), AppColors.primary],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: AppColors.primary,
               shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withOpacity(0.3),
-                  blurRadius: 20,
-                  offset: const Offset(0, 6),
-                ),
-              ],
             ),
-            child: const Center(
+            child: Center(
               child: Text(
                 'M',
                 style: TextStyle(
@@ -1125,8 +1112,8 @@ class _EmptyState extends StatelessWidget {
               child: Container(
                 width: double.infinity,
                 margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
@@ -1147,8 +1134,7 @@ class _EmptyState extends StatelessWidget {
                         color: AppColors.primary.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(icon,
-                          size: 16, color: AppColors.primary),
+                      child: Icon(icon, size: 16, color: AppColors.primary),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -1204,8 +1190,7 @@ class _QuickReplyChips extends StatelessWidget {
               onTap(replies[i]);
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
@@ -1314,9 +1299,8 @@ class _ChatInput extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: isLoading
-                      ? const Color(0xFFE8EDF2)
-                      : AppColors.primary,
+                  color:
+                      isLoading ? const Color(0xFFE8EDF2) : AppColors.primary,
                   shape: BoxShape.circle,
                   boxShadow: isLoading
                       ? null
@@ -1370,8 +1354,7 @@ class _ErrorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(
-          Spacing.md, 0, Spacing.md, Spacing.xs),
+      margin: const EdgeInsets.fromLTRB(Spacing.md, 0, Spacing.md, Spacing.xs),
       padding: const EdgeInsets.all(Spacing.sm),
       decoration: BoxDecoration(
         color: AppColors.error.withOpacity(0.08),
@@ -1380,8 +1363,7 @@ class _ErrorBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(LucideIcons.circleAlert,
-              color: AppColors.error, size: 18),
+          const Icon(LucideIcons.circleAlert, color: AppColors.error, size: 18),
           const SizedBox(width: Spacing.xs),
           Expanded(
             child: Text(
@@ -1419,8 +1401,7 @@ class _CrisisBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(
-          Spacing.md, Spacing.sm, Spacing.md, 0),
+      margin: const EdgeInsets.fromLTRB(Spacing.md, Spacing.sm, Spacing.md, 0),
       padding: const EdgeInsets.all(Spacing.md),
       decoration: BoxDecoration(
         color: AppColors.error.withOpacity(0.07),
@@ -1432,8 +1413,7 @@ class _CrisisBanner extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(LucideIcons.heart,
-                  color: AppColors.error, size: 20),
+              const Icon(LucideIcons.heart, color: AppColors.error, size: 20),
               const SizedBox(width: Spacing.xs),
               const Text(
                 'We care about you',
@@ -1446,8 +1426,8 @@ class _CrisisBanner extends StatelessWidget {
               const Spacer(),
               GestureDetector(
                 onTap: onDismiss,
-                child: const Icon(LucideIcons.x,
-                    size: 18, color: AppColors.error),
+                child:
+                    const Icon(LucideIcons.x, size: 18, color: AppColors.error),
               ),
             ],
           ),
@@ -1467,8 +1447,7 @@ class _CrisisBanner extends StatelessWidget {
                 child: GestureDetector(
                   onTap: onGetHelp,
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: Spacing.sm),
+                    padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
                     decoration: BoxDecoration(
                       color: AppColors.error,
                       borderRadius: AppRadius.lgAll,
@@ -1510,15 +1489,51 @@ class _NavSheet extends StatelessWidget {
   const _NavSheet({required this.onNavigate});
 
   static const _destinations = [
-    _NavDest(icon: LucideIcons.house, label: 'Home', route: AppRoutes.home, color: AppColors.primary),
-    _NavDest(icon: LucideIcons.heart, label: 'Mood Check-in', route: AppRoutes.moodTracker, color: Color(0xFFFF6B6B)),
-    _NavDest(icon: LucideIcons.chartBar, label: 'Mood Analytics', route: AppRoutes.moodAnalytics, color: Color(0xFF0EA5E9)),
-    _NavDest(icon: LucideIcons.bookOpen, label: 'Journal', route: AppRoutes.journal, color: Color(0xFFF59E0B)),
-    _NavDest(icon: LucideIcons.wind, label: 'Mindfulness', route: AppRoutes.mindfulness, color: Color(0xFF10B981)),
-    _NavDest(icon: LucideIcons.activity, label: 'Wellness Hub', route: AppRoutes.wellness, color: Color(0xFF06D6A0)),
-    _NavDest(icon: LucideIcons.library, label: 'Resources', route: AppRoutes.resources, color: Color(0xFFF59E0B)),
-    _NavDest(icon: LucideIcons.users, label: 'Community', route: AppRoutes.community, color: Color(0xFF0EA5E9)),
-    _NavDest(icon: LucideIcons.userRound, label: 'Profile & Settings', route: AppRoutes.profile, color: AppColors.primary),
+    _NavDest(
+        icon: LucideIcons.house,
+        label: 'Home',
+        route: AppRoutes.home,
+        color: AppColors.primary),
+    _NavDest(
+        icon: LucideIcons.heart,
+        label: 'Mood Check-in',
+        route: AppRoutes.moodTracker,
+        color: Color(0xFFFF6B6B)),
+    _NavDest(
+        icon: LucideIcons.chartBar,
+        label: 'Mood Analytics',
+        route: AppRoutes.moodAnalytics,
+        color: Color(0xFF0EA5E9)),
+    _NavDest(
+        icon: LucideIcons.bookOpen,
+        label: 'Journal',
+        route: AppRoutes.journal,
+        color: Color(0xFFF59E0B)),
+    _NavDest(
+        icon: LucideIcons.wind,
+        label: 'Mindfulness',
+        route: AppRoutes.mindfulness,
+        color: Color(0xFF10B981)),
+    _NavDest(
+        icon: LucideIcons.activity,
+        label: 'Wellness Hub',
+        route: AppRoutes.wellness,
+        color: Color(0xFF06D6A0)),
+    _NavDest(
+        icon: LucideIcons.library,
+        label: 'Resources',
+        route: AppRoutes.resources,
+        color: Color(0xFFF59E0B)),
+    _NavDest(
+        icon: LucideIcons.users,
+        label: 'Community',
+        route: AppRoutes.community,
+        color: Color(0xFF0EA5E9)),
+    _NavDest(
+        icon: LucideIcons.userRound,
+        label: 'Profile & Settings',
+        route: AppRoutes.profile,
+        color: AppColors.primary),
   ];
 
   @override
@@ -1547,13 +1562,12 @@ class _NavSheet extends StatelessWidget {
                 Container(
                   width: 36,
                   height: 36,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [AppColors.primaryDark, AppColors.primary],
-                    ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(LucideIcons.layoutGrid, size: 18, color: Colors.white),
+                  child: Icon(LucideIcons.layoutGrid,
+                      size: 18, color: Colors.white),
                 ),
                 const SizedBox(width: 12),
                 const Column(
@@ -1595,10 +1609,12 @@ class _NavSheet extends StatelessWidget {
                 mainAxisSpacing: 10,
                 crossAxisSpacing: 10,
                 childAspectRatio: 0.95,
-                children: _destinations.map((d) => _NavGridItem(
-                  dest: d,
-                  onTap: () => onNavigate(d.route),
-                )).toList(),
+                children: _destinations
+                    .map((d) => _NavGridItem(
+                          dest: d,
+                          onTap: () => onNavigate(d.route),
+                        ))
+                    .toList(),
               ),
             ),
           ),
@@ -1607,7 +1623,8 @@ class _NavSheet extends StatelessWidget {
             child: GestureDetector(
               onTap: () => onNavigate(AppRoutes.crisis),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color: AppColors.error.withOpacity(0.07),
                   borderRadius: BorderRadius.circular(16),
@@ -1641,7 +1658,8 @@ class _NavSheet extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Icon(LucideIcons.chevronRight, color: AppColors.error, size: 18),
+                    Icon(LucideIcons.chevronRight,
+                        color: AppColors.error, size: 18),
                   ],
                 ),
               ),
@@ -1666,7 +1684,8 @@ class _CrisisIconBox extends StatelessWidget {
         color: AppColors.error.withOpacity(0.12),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Icon(LucideIcons.phoneCall, color: AppColors.error, size: 20),
+      child:
+          const Icon(LucideIcons.phoneCall, color: AppColors.error, size: 20),
     );
   }
 }
@@ -1696,7 +1715,8 @@ class _MarkdownRenderer extends StatelessWidget {
   Widget build(BuildContext context) {
     final textColor = isUser ? Colors.white : AppColors.textPrimary;
     final mutedColor = isUser ? Colors.white70 : AppColors.textMuted;
-    final accentColor = isUser ? Colors.white.withOpacity(0.85) : AppColors.primary;
+    final accentColor =
+        isUser ? Colors.white.withOpacity(0.85) : AppColors.primary;
 
     final ss = MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
       p: TextStyle(
@@ -1746,9 +1766,8 @@ class _MarkdownRenderer extends StatelessWidget {
         fontSize: 13,
         color: isUser ? Colors.white : AppColors.primaryDark,
         fontFamily: 'monospace',
-        backgroundColor: isUser
-            ? Colors.white.withOpacity(0.2)
-            : const Color(0xFFE0F7F6),
+        backgroundColor:
+            isUser ? Colors.white.withOpacity(0.2) : const Color(0xFFE0F7F6),
       ),
       codeblockPadding: const EdgeInsets.all(12),
       codeblockDecoration: BoxDecoration(
@@ -1779,19 +1798,17 @@ class _MarkdownRenderer extends StatelessWidget {
       ),
       horizontalRuleDecoration: BoxDecoration(
         border: Border(
-            top: BorderSide(
-                color: isUser ? Colors.white30 : AppColors.border)),
+            top: BorderSide(color: isUser ? Colors.white30 : AppColors.border)),
       ),
       tableHead: TextStyle(
           fontFamily: 'Nunito',
           fontSize: 13,
           fontWeight: FontWeight.w800,
           color: isUser ? Colors.white : AppColors.primaryDark),
-      tableBody: TextStyle(
-          fontFamily: 'Nunito', fontSize: 13, color: textColor),
+      tableBody:
+          TextStyle(fontFamily: 'Nunito', fontSize: 13, color: textColor),
       tableBorder: isUser
-          ? TableBorder.all(
-              color: Colors.white.withOpacity(0.25), width: 0.7)
+          ? TableBorder.all(color: Colors.white.withOpacity(0.25), width: 0.7)
           : TableBorder.all(color: AppColors.border, width: 0.7),
       tableCellsPadding:
           const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -1857,4 +1874,3 @@ class _NavGridItem extends StatelessWidget {
     );
   }
 }
-

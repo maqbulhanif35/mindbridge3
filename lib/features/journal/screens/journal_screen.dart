@@ -954,7 +954,7 @@ class _InsightsTabState extends ConsumerState<_InsightsTab> {
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            gradient: AppColors.heroGradient,
+            gradient: null,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
@@ -2183,7 +2183,7 @@ class _EmptyJournal extends StatelessWidget {
             width: 96,
             height: 96,
             decoration: BoxDecoration(
-              gradient: AppColors.heroGradient,
+              gradient: null,
               borderRadius: BorderRadius.circular(28),
               boxShadow: [
                 BoxShadow(
@@ -2221,7 +2221,7 @@ class _EmptyJournal extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
               decoration: BoxDecoration(
-                gradient: AppColors.heroGradient,
+                gradient: null,
                 borderRadius: BorderRadius.circular(50),
                 boxShadow: [
                   BoxShadow(

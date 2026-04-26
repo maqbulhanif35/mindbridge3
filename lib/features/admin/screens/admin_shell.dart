@@ -320,7 +320,7 @@ class _Sidebar extends StatelessWidget {
                       height: 36,
                       margin: const EdgeInsets.symmetric(horizontal: 18),
                       decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
+                        gradient: null,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(LucideIcons.crown,
@@ -347,7 +347,7 @@ class _Sidebar extends StatelessWidget {
                             width: 32,
                             height: 32,
                             decoration: BoxDecoration(
-                              gradient: AppColors.primaryGradient,
+                              gradient: null,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Icon(LucideIcons.crown,
@@ -522,7 +522,7 @@ class _SidebarHeader extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
+              gradient: null,
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(LucideIcons.brain, size: 20, color: Colors.white),
@@ -1296,7 +1296,7 @@ class _MobileAdminShellState extends ConsumerState<_MobileAdminShell>
               width: 30,
               height: 30,
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
+                gradient: null,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(LucideIcons.brain,

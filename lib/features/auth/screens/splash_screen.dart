@@ -40,7 +40,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     if (_navigated || !mounted) return;
     final auth = ref.read(authProvider);
 
-    // Still loading — wait for the listener to fire
     if (auth.status == AuthStatus.initial || auth.status == AuthStatus.loading) return;
 
     _navigated = true;
@@ -68,18 +67,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Listen for auth state changes — navigate as soon as auth resolves AND min delay is done
     ref.listen<AuthState>(authProvider, (_, next) {
-      if (!_minDelayDone) return; // still showing splash animation
+      if (!_minDelayDone) return;
       if (next.status == AuthStatus.initial || next.status == AuthStatus.loading) return;
       _tryNavigate();
     });
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.heroGradient,
-        ),
+        color: AppColors.primary, // ← replaced gradient with solid color
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

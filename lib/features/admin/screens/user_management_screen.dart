@@ -328,7 +328,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            gradient: AppColors.primaryGradient,
+                            gradient: null,
                             borderRadius: AppRadius.smAll,
                           ),
                           child: const Icon(LucideIcons.userPlus,

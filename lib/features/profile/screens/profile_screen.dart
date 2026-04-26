@@ -1038,7 +1038,7 @@ class _WellnessSnapshot extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(Spacing.md),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).primaryColor,
         borderRadius: AppRadius.xlAll,
         border: Border.all(color: AppColors.border),
         boxShadow: AppShadow.sm,
@@ -1056,7 +1056,7 @@ class _WellnessSnapshot extends StatelessWidget {
                   fontFamily: 'Nunito',
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                  color: AppColors.surface,
                 ),
               ),
               const Spacer(),
@@ -1649,7 +1649,7 @@ class _MayaPersonalityCard extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).primaryColor,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.primary.withOpacity(0.2)),
         boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 3))],
@@ -1660,14 +1660,14 @@ class _MayaPersonalityCard extends ConsumerWidget {
           Row(children: [
             Container(
               padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.10), borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(10)),
               child: const Icon(LucideIcons.bot, size: 16, color: AppColors.primary),
             ),
             const SizedBox(width: 10),
             const Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("Maya's Style", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                Text("Maya's Style", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.surface)),
                 Text('Tap a card to change how Maya talks to you', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
               ],
             )),
@@ -1746,7 +1746,7 @@ class _MoodSparklineCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).primaryColor,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.border),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 3))],
@@ -1757,7 +1757,7 @@ class _MoodSparklineCard extends StatelessWidget {
           Row(children: [
             const Icon(LucideIcons.trendingUp, size: 16, color: AppColors.primary),
             const SizedBox(width: 7),
-            const Expanded(child: Text('90-Day Mood Trend', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary))),
+            const Expanded(child: Text('90-Day Mood Trend', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.surface))),
             if (hasData)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1770,7 +1770,7 @@ class _MoodSparklineCard extends StatelessWidget {
           ]),
           const SizedBox(height: 14),
           if (!hasData)
-            Center(
+            const Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Text('Log moods to see your trend', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
@@ -2668,7 +2668,8 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
 
     // Verify current password by re-authenticating
     try {
-      await SupabaseService.signIn(email: user.email, password: old);
+      var t = await SupabaseService.signIn(email: user.email, password: old);
+      print("SUPABASE: $t");
     } catch (_) {
       setState(() { _loading = false; _error = 'Current password is incorrect.'; });
       return;
@@ -2981,7 +2982,7 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
         controller: controller,
         obscureText: !show,
         autofocus: autofocus,
-        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500,),
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
