@@ -1271,7 +1271,7 @@ class _ChatInput extends StatelessWidget {
                     style: const TextStyle(
                       fontFamily: 'Nunito',
                       fontSize: 15,
-                      color: AppColors.textPrimary,
+                      color: AppColors.surface,
                       height: 1.45,
                     ),
                     decoration: InputDecoration(
