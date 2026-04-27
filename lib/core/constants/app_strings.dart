@@ -223,15 +223,15 @@ Remember: You are often talking to someone who needs to feel heard. Prioritize e
 
   static const List<Map<String, String>> crisisContacts = [
     {
-      'name': '988 Suicide & Crisis Lifeline',
-      'number': '988',
-      'description': 'Call or text 988 — Available 24/7 (US)',
+      'name': 'Niskize Lifeline',
+      'number': '+254 718 227 440',
+      'description': 'Call or text +254 718 227 440 — Available 24/7',
       'type': 'hotline',
     },
     {
-      'name': 'Crisis Text Line',
-      'number': '741741',
-      'description': "Text HOME to 741741 — Available 24/7",
+      'name': 'Befrienders Text Line',
+      'number': '+254 722 178177',
+      'description': "Text HOME to '+254 722 178177 — Available 24/7",
       'type': 'text',
     },
     {
@@ -240,12 +240,12 @@ Remember: You are often talking to someone who needs to feel heard. Prioritize e
       'description': 'Call 911 if there is immediate danger',
       'type': 'emergency',
     },
-    {
-      'name': 'SAMHSA Helpline',
-      'number': '1-800-662-4357',
-      'description': 'Substance & mental health — Free, confidential',
-      'type': 'hotline',
-    },
+    // {
+    //   'name': 'SAMHSA Helpline',
+    //   'number': '1-800-662-4357',
+    //   'description': 'Substance & mental health — Free, confidential',
+    //   'type': 'hotline',
+    // },
   ];
 
   // ─── Mindfulness ──────────────────────────────────────

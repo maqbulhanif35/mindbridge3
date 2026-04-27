@@ -1,9 +1,14 @@
+import 'dart:math';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 import '../models/user_model.dart';
 import '../services/email_service.dart';
 import '../services/notification_service.dart';
 import '../services/supabase_service.dart';
+
+String _generateOtp() =>
+    (Random.secure().nextInt(900000) + 100000).toString();
 
 // ─── Auth Status ──────────────────────────────────────────
 
@@ -245,10 +250,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
 
     try {
-      // Send OTP from our backend — no Supabase call yet
+      final otpCode = _generateOtp();
+      final otpSentAt = DateTime.now().millisecondsSinceEpoch;
+
       final otpSent = await EmailService.sendOtp(
         toEmail: normalizedEmail,
         name: name.trim(),
+        code: otpCode,
         type: 'verify',
       );
 
@@ -261,7 +269,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return false;
       }
 
-      // Hold form data in-memory until OTP is confirmed
+      // Hold form data + OTP in-memory until the user enters the code
       state = AuthState(
         status: AuthStatus.pendingVerification,
         pendingEmail: normalizedEmail,
@@ -276,6 +284,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
           'mayaPersonality': mayaPersonality,
           'checkInTime': checkInTime,
           'therapyExperience': therapyExperience,
+          'otpCode': otpCode,
+          'otpSentAt': otpSentAt,
         },
       );
       return true;
@@ -302,13 +312,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
     _suppressAuthStream = true;
 
     try {
-      // Step 1 — Verify code against our backend OTP store
-      final otpValid =
-          await EmailService.verifyOtp(email: email, code: code.trim());
-      if (!otpValid) {
+      // Step 1 — Verify code against the in-memory OTP
+      final storedCode = regData['otpCode'] as String?;
+      final sentAt = regData['otpSentAt'] as int?;
+      final expired = sentAt != null &&
+          DateTime.now().millisecondsSinceEpoch - sentAt >
+              const Duration(minutes: 15).inMilliseconds;
+
+      if (storedCode == null || code.trim() != storedCode || expired) {
         state = state.copyWith(
           status: AuthStatus.pendingVerification,
-          errorMessage: 'Invalid or expired code. Try resending.',
+          errorMessage: expired
+              ? 'Code expired. Please request a new one.'
+              : 'Invalid or expired code. Try resending.',
         );
         return false;
       }
@@ -402,20 +418,33 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   // ─── Email Verification ───────────────────────────────
 
-  /// Resend the signup OTP via our backend.
+  /// Resend the signup OTP — generates a fresh code and updates state.
   Future<bool> resendVerificationEmail() async {
     final email = state.pendingEmail;
     if (email == null) return false;
-    final name =
-        (state.pendingRegistrationData?['name'] as String?) ?? 'there';
+    final regData = state.pendingRegistrationData ?? {};
+    final name = (regData['name'] as String?) ?? 'there';
+
+    final otpCode = _generateOtp();
+    final otpSentAt = DateTime.now().millisecondsSinceEpoch;
+
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
     try {
       final ok = await EmailService.sendOtp(
         toEmail: email,
         name: name,
+        code: otpCode,
         type: 'verify',
       );
-      state = state.copyWith(status: AuthStatus.pendingVerification);
+      // Update the stored code so the new one is what gets verified
+      state = state.copyWith(
+        status: AuthStatus.pendingVerification,
+        pendingRegistrationData: {
+          ...regData,
+          'otpCode': otpCode,
+          'otpSentAt': otpSentAt,
+        },
+      );
       return ok;
     } catch (_) {
       state = state.copyWith(
