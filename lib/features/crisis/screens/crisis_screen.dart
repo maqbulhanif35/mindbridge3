@@ -335,9 +335,9 @@ class CrisisScreen extends StatelessWidget {
             PrimaryButton(
               label: "I'm Safe Now ✓",
               onTap: () => Navigator.pop(context),
-              gradient: const LinearGradient(
-                colors: [AppColors.success, AppColors.secondary],
-              ),
+              // gradient: const LinearGradient(
+              //   colors: [AppColors.success, AppColors.secondary],
+              // ),
             ).animate().fadeIn(delay: 900.ms),
           ],
         ),

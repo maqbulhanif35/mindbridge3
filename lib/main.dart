@@ -11,7 +11,7 @@ void main() async {
 
   // Load environment variables (only exists locally — silently ignored in production)
   try {
-    await dotenv.load(fileName: '.env');
+    var envVars = await dotenv.load(fileName: '.env');
   } catch (_) {}
 
   // Transparent status bar
@@ -30,8 +30,7 @@ void main() async {
   // Initialize Supabase
   await Supabase.initialize(
     url: 'https://fdkwqzeyrcvxgqlpbjnp.supabase.co',
-    anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZka3dxemV5cmN2eGdxbHBiam5wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1MjUwOTcsImV4cCI6MjA4ODEwMTA5N30.ZpseLUTBAcFuJkYt33ojeswf0b3GlCLfOa3AuG6mmRM',
+    anonKey:dotenv.env["ANON_KEY"]!,
     // PKCE is the default and most secure flow for web OAuth
     authOptions: const FlutterAuthClientOptions(
       authFlowType: AuthFlowType.pkce,

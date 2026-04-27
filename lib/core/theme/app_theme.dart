@@ -23,32 +23,31 @@ abstract class AppTheme {
         useMaterial3: true,
         brightness: Brightness.light,
         colorScheme: const ColorScheme.light(
-          primary: AppColors.primary,
-          onPrimary: AppColors.background,
+          primary: AppColors.gruvboxLightYellow,
+          onPrimary: AppColors.gruvboxLightBg,
           primaryContainer: AppColors.primaryContainer,
-          onPrimaryContainer: AppColors.textPrimary,
-          secondary: AppColors.secondary,
-          onSecondary: Colors.white,
+          onPrimaryContainer: AppColors.gruvboxLightFg,
+          secondary: AppColors.gruvboxLightRed,
+          onSecondary: AppColors.gruvboxLightBg,
           secondaryContainer: AppColors.secondaryContainer,
-          onSecondaryContainer: AppColors.textPrimary,
-          tertiary: AppColors.tertiary,
-          onTertiary: Colors.white,
-          tertiaryContainer: AppColors.tertiaryContainer,
-          error: AppColors.error,
-          onError: Colors.white,
-          errorContainer: AppColors.errorContainer,
+          onSecondaryContainer: AppColors.gruvboxLightFg,
+          tertiary: AppColors.gruvboxLightBlue,
+          onTertiary: AppColors.gruvboxLightBg,
+          error: AppColors.gruvboxLightRed,
+          onError: AppColors.gruvboxLightBg,
           surface: AppColors.surface,
-          onSurface: AppColors.textPrimary,
+          onSurface: AppColors.gruvboxLightFg,
           surfaceContainerHighest: AppColors.surfaceVariant,
           outline: AppColors.border,
           outlineVariant: AppColors.divider,
         ),
         scaffoldBackgroundColor: AppColors.background,
-        textTheme: _buildTextTheme(AppColors.textPrimary),
+        textTheme: _buildTextTheme(AppColors.gruvboxLightFg),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
+          backgroundColor: AppColors.surface,
           elevation: 0,
           scrolledUnderElevation: 0,
+          centerTitle: false,
           systemOverlayStyle: SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
             statusBarIconBrightness: Brightness.dark,
@@ -56,204 +55,109 @@ abstract class AppTheme {
           titleTextStyle: TextStyle(
             fontFamily: 'Nunito',
             fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w800,
+            color: AppColors.gruvboxLightFg,
+            letterSpacing: 0.5,
           ),
-          iconTheme: IconThemeData(color: AppColors.textPrimary),
+          iconTheme: IconThemeData(color: AppColors.gruvboxLightFg),
         ),
         cardTheme: CardThemeData(
           color: AppColors.surface,
           elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(0),
-            side: const BorderSide(color: AppColors.border, width: 1),
-          ),
           margin: EdgeInsets.zero,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+            side: BorderSide(color: AppColors.border, width: 1.5),
+          ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: AppColors.background,
+            backgroundColor: AppColors.gruvboxLightYellow,
+            foregroundColor: AppColors.gruvboxLightBg,
             elevation: 0,
-            shadowColor: Colors.transparent,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(0),
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.zero,
+              side: BorderSide(color: AppColors.gruvboxLightFg, width: 1.5),
             ),
             textStyle: const TextStyle(
               fontFamily: 'Nunito',
               fontSize: 16,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.3,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.primary,
-            side: const BorderSide(color: AppColors.primary, width: 1.5),
+            foregroundColor: AppColors.gruvboxLightFg,
+            side: const BorderSide(color: AppColors.gruvboxLightFg, width: 2),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(0),
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.zero,
             ),
             textStyle: const TextStyle(
               fontFamily: 'Nunito',
               fontSize: 16,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ),
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
-            foregroundColor: AppColors.primary,
+            foregroundColor: AppColors.gruvboxLightFg,
             textStyle: const TextStyle(
               fontFamily: 'Nunito',
               fontSize: 15,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w800,
+              decoration: TextDecoration.underline,
             ),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: AppColors.surfaceVariant,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(0),
-            borderSide: BorderSide.none,
+          border: const OutlineInputBorder(
+            borderRadius: BorderRadius.zero,
+            borderSide: BorderSide(color: AppColors.gruvboxLightFg, width: 1.5),
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(0),
-            borderSide: const BorderSide(color: AppColors.border, width: 1),
+          enabledBorder: const OutlineInputBorder(
+            borderRadius: BorderRadius.zero,
+            borderSide: BorderSide(color: AppColors.gruvboxLightFg, width: 1.5),
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(0),
-            borderSide: const BorderSide(color: AppColors.primary, width: 2),
+          focusedBorder: const OutlineInputBorder(
+            borderRadius: BorderRadius.zero,
+            borderSide: BorderSide(color: AppColors.gruvboxLightYellow, width: 2.5),
           ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(0),
-            borderSide: const BorderSide(color: AppColors.error, width: 1.5),
-          ),
-          focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(0),
-            borderSide: const BorderSide(color: AppColors.error, width: 2),
-          ),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          hintStyle: const TextStyle(
-            fontFamily: 'Nunito',
-            color: AppColors.textMuted,
-            fontSize: 15,
-          ),
-          labelStyle: const TextStyle(
-            fontFamily: 'Nunito',
-            color: AppColors.textSecondary,
-            fontSize: 15,
-            fontWeight: FontWeight.w500,
-          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          hintStyle: const TextStyle(color: AppColors.textMuted),
         ),
         chipTheme: ChipThemeData(
-          backgroundColor: AppColors.surfaceVariant,
-          selectedColor: AppColors.primaryContainer,
-          labelStyle: const TextStyle(
-            fontFamily: 'Nunito',
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
+          backgroundColor: AppColors.surface,
+          selectedColor: AppColors.gruvboxLightYellow,
+          labelStyle: const TextStyle(fontWeight: FontWeight.w700),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+            side: BorderSide(color: AppColors.gruvboxLightFg, width: 1.5),
           ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(0),
-            side: const BorderSide(color: AppColors.border),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         ),
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
           backgroundColor: AppColors.surface,
-          selectedItemColor: AppColors.primary,
+          selectedItemColor: AppColors.gruvboxLightRed,
           unselectedItemColor: AppColors.textMuted,
-          type: BottomNavigationBarType.fixed,
           elevation: 0,
-          selectedLabelStyle: TextStyle(
-            fontFamily: 'Nunito',
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-          unselectedLabelStyle: TextStyle(
-            fontFamily: 'Nunito',
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        snackBarTheme: SnackBarThemeData(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppColors.textPrimary,
-          contentTextStyle: const TextStyle(
-            fontFamily: 'Nunito',
-            color: Colors.white,
-            fontSize: 14,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(0),
-          ),
+          showSelectedLabels: true,
+          showUnselectedLabels: true,
+          type: BottomNavigationBarType.fixed,
         ),
         dividerTheme: const DividerThemeData(
-          color: AppColors.divider,
+          color: AppColors.gruvboxLightFg,
+          thickness: 1.5,
           space: 1,
-          thickness: 1,
-        ),
-        floatingActionButtonTheme: FloatingActionButtonThemeData(
-          backgroundColor: AppColors.primary,
-          foregroundColor: AppColors.background,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(0),
-          ),
-        ),
-        dialogTheme: DialogThemeData(
-          backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(0),
-          ),
-          titleTextStyle: const TextStyle(
-            fontFamily: 'Nunito',
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
-          ),
-          contentTextStyle: const TextStyle(
-            fontFamily: 'Nunito',
-            fontSize: 15,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        sliderTheme: SliderThemeData(
-          activeTrackColor: AppColors.primary,
-          inactiveTrackColor: AppColors.primaryContainer,
-          thumbColor: AppColors.primary,
-          overlayColor: AppColors.primary.withValues(alpha: 0.15),
-          trackHeight: 4,
-          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
-        ),
-        switchTheme: SwitchThemeData(
-          thumbColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.selected)
-                ? AppColors.primary
-                : AppColors.textMuted,
-          ),
-          trackColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.selected)
-                ? AppColors.primaryContainer
-                : AppColors.border,
-          ),
-        ),
-        progressIndicatorTheme: const ProgressIndicatorThemeData(
-          color: AppColors.primary,
-          linearTrackColor: AppColors.primaryContainer,
         ),
         pageTransitionsTheme: const PageTransitionsTheme(
           builders: {
             TargetPlatform.android: NoTransitionsBuilder(),
             TargetPlatform.iOS: NoTransitionsBuilder(),
-            TargetPlatform.linux: NoTransitionsBuilder(),
-            TargetPlatform.macOS: NoTransitionsBuilder(),
-            TargetPlatform.windows: NoTransitionsBuilder(),
           },
         ),
       );
@@ -265,28 +169,27 @@ abstract class AppTheme {
         colorScheme: const ColorScheme.dark(
           primary: AppColors.gruvboxDarkYellow,
           onPrimary: AppColors.gruvboxDarkBg,
-          primaryContainer: Color(0xFF3A3521),
+          primaryContainer: AppColors.darkPrimaryContainer,
           onPrimaryContainer: AppColors.gruvboxDarkFg,
           secondary: AppColors.gruvboxDarkRed,
           onSecondary: AppColors.gruvboxDarkBg,
-          secondaryContainer: Color(0xFF3D2421),
-          onSecondaryContainer: AppColors.gruvboxDarkFg,
           tertiary: AppColors.gruvboxDarkBlue,
           onTertiary: AppColors.gruvboxDarkBg,
           error: AppColors.gruvboxDarkRed,
           onError: AppColors.gruvboxDarkBg,
           surface: AppColors.surfaceDark,
-          onSurface: AppColors.textPrimaryDark,
+          onSurface: AppColors.gruvboxDarkFg,
           surfaceContainerHighest: AppColors.surfaceVariantDark,
           outline: AppColors.borderDark,
           outlineVariant: AppColors.dividerDark,
         ),
         scaffoldBackgroundColor: AppColors.backgroundDark,
-        textTheme: _buildTextTheme(AppColors.textPrimaryDark),
+        textTheme: _buildTextTheme(AppColors.gruvboxDarkFg),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
+          backgroundColor: AppColors.surfaceDark,
           elevation: 0,
           scrolledUnderElevation: 0,
+          centerTitle: false,
           systemOverlayStyle: SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
             statusBarIconBrightness: Brightness.light,
@@ -294,208 +197,109 @@ abstract class AppTheme {
           titleTextStyle: TextStyle(
             fontFamily: 'Nunito',
             fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimaryDark,
+            fontWeight: FontWeight.w800,
+            color: AppColors.gruvboxDarkFg,
+            letterSpacing: 0.5,
           ),
-          iconTheme: IconThemeData(color: AppColors.textPrimaryDark),
+          iconTheme: IconThemeData(color: AppColors.gruvboxDarkFg),
         ),
         cardTheme: CardThemeData(
           color: AppColors.surfaceDark,
           elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(0),
-            side: const BorderSide(color: AppColors.borderDark, width: 1),
-          ),
           margin: EdgeInsets.zero,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+            side: BorderSide(color: AppColors.borderDark, width: 1.5),
+          ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.gruvboxDarkYellow,
             foregroundColor: AppColors.gruvboxDarkBg,
             elevation: 0,
-            shadowColor: Colors.transparent,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(0),
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.zero,
+              side: BorderSide(color: AppColors.gruvboxDarkFg, width: 1.5),
             ),
             textStyle: const TextStyle(
               fontFamily: 'Nunito',
               fontSize: 16,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.3,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.gruvboxDarkYellow,
-            side: const BorderSide(
-                color: AppColors.gruvboxDarkYellow, width: 1.5),
+            foregroundColor: AppColors.gruvboxDarkFg,
+            side: const BorderSide(color: AppColors.gruvboxDarkFg, width: 2),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(0),
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.zero,
             ),
             textStyle: const TextStyle(
               fontFamily: 'Nunito',
               fontSize: 16,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ),
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
-            foregroundColor: AppColors.gruvboxDarkYellow,
+            foregroundColor: AppColors.gruvboxDarkFg,
             textStyle: const TextStyle(
               fontFamily: 'Nunito',
               fontSize: 15,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w800,
+              decoration: TextDecoration.underline,
             ),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: AppColors.surfaceVariantDark,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(0),
-            borderSide: BorderSide.none,
+          border: const OutlineInputBorder(
+            borderRadius: BorderRadius.zero,
+            borderSide: BorderSide(color: AppColors.gruvboxDarkFg, width: 1.5),
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(0),
-            borderSide: const BorderSide(color: AppColors.borderDark, width: 1),
+          enabledBorder: const OutlineInputBorder(
+            borderRadius: BorderRadius.zero,
+            borderSide: BorderSide(color: AppColors.gruvboxDarkFg, width: 1.5),
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(0),
-            borderSide:
-                const BorderSide(color: AppColors.gruvboxDarkYellow, width: 2),
+          focusedBorder: const OutlineInputBorder(
+            borderRadius: BorderRadius.zero,
+            borderSide: BorderSide(color: AppColors.gruvboxDarkYellow, width: 2.5),
           ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(0),
-            borderSide:
-                const BorderSide(color: AppColors.gruvboxDarkRed, width: 1.5),
-          ),
-          focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(0),
-            borderSide:
-                const BorderSide(color: AppColors.gruvboxDarkRed, width: 2),
-          ),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          hintStyle: const TextStyle(
-            fontFamily: 'Nunito',
-            color: AppColors.textMutedDark,
-            fontSize: 15,
-          ),
-          labelStyle: const TextStyle(
-            fontFamily: 'Nunito',
-            color: AppColors.textSecondaryDark,
-            fontSize: 15,
-            fontWeight: FontWeight.w500,
-          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          hintStyle: const TextStyle(color: AppColors.textMutedDark),
         ),
         chipTheme: ChipThemeData(
-          backgroundColor: AppColors.surfaceVariantDark,
-          selectedColor: const Color(0xFF3A3521),
-          labelStyle: const TextStyle(
-            fontFamily: 'Nunito',
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
+          backgroundColor: AppColors.surfaceDark,
+          selectedColor: AppColors.gruvboxDarkYellow,
+          labelStyle: const TextStyle(fontWeight: FontWeight.w700),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+            side: BorderSide(color: AppColors.gruvboxDarkFg, width: 1.5),
           ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(0),
-            side: const BorderSide(color: AppColors.borderDark),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         ),
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
           backgroundColor: AppColors.surfaceDark,
-          selectedItemColor: AppColors.gruvboxDarkYellow,
+          selectedItemColor: AppColors.gruvboxDarkRed,
           unselectedItemColor: AppColors.textMutedDark,
-          type: BottomNavigationBarType.fixed,
           elevation: 0,
-          selectedLabelStyle: TextStyle(
-            fontFamily: 'Nunito',
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-          unselectedLabelStyle: TextStyle(
-            fontFamily: 'Nunito',
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        snackBarTheme: SnackBarThemeData(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppColors.textPrimaryDark,
-          contentTextStyle: const TextStyle(
-            fontFamily: 'Nunito',
-            color: AppColors.gruvboxDarkBg,
-            fontSize: 14,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(0),
-          ),
+          showSelectedLabels: true,
+          showUnselectedLabels: true,
+          type: BottomNavigationBarType.fixed,
         ),
         dividerTheme: const DividerThemeData(
-          color: AppColors.dividerDark,
+          color: AppColors.gruvboxDarkFg,
+          thickness: 1.5,
           space: 1,
-          thickness: 1,
-        ),
-        floatingActionButtonTheme: FloatingActionButtonThemeData(
-          backgroundColor: AppColors.gruvboxDarkYellow,
-          foregroundColor: AppColors.gruvboxDarkBg,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(0),
-          ),
-        ),
-        dialogTheme: DialogThemeData(
-          backgroundColor: AppColors.surfaceDark,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(0),
-          ),
-          titleTextStyle: const TextStyle(
-            fontFamily: 'Nunito',
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimaryDark,
-          ),
-          contentTextStyle: const TextStyle(
-            fontFamily: 'Nunito',
-            fontSize: 15,
-            color: AppColors.textSecondaryDark,
-          ),
-        ),
-        sliderTheme: SliderThemeData(
-          activeTrackColor: AppColors.gruvboxDarkYellow,
-          inactiveTrackColor: const Color(0xFF3A3521),
-          thumbColor: AppColors.gruvboxDarkYellow,
-          overlayColor: AppColors.gruvboxDarkYellow.withValues(alpha: 0.15),
-          trackHeight: 4,
-          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
-        ),
-        switchTheme: SwitchThemeData(
-          thumbColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.selected)
-                ? AppColors.gruvboxDarkYellow
-                : AppColors.textMutedDark,
-          ),
-          trackColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.selected)
-                ? const Color(0xFF3A3521)
-                : AppColors.borderDark,
-          ),
-        ),
-        progressIndicatorTheme: const ProgressIndicatorThemeData(
-          color: AppColors.gruvboxDarkYellow,
-          linearTrackColor: Color(0xFF3A3521),
         ),
         pageTransitionsTheme: const PageTransitionsTheme(
           builders: {
             TargetPlatform.android: NoTransitionsBuilder(),
             TargetPlatform.iOS: NoTransitionsBuilder(),
-            TargetPlatform.linux: NoTransitionsBuilder(),
-            TargetPlatform.macOS: NoTransitionsBuilder(),
-            TargetPlatform.windows: NoTransitionsBuilder(),
           },
         ),
       );

@@ -11,7 +11,7 @@ class PrimaryButton extends StatelessWidget {
   final IconData? icon;
   final double? width;
   final double height;
-  final Gradient? gradient;
+  final Color? color;
 
   const PrimaryButton({
     super.key,
@@ -22,59 +22,51 @@ class PrimaryButton extends StatelessWidget {
     this.icon,
     this.width,
     this.height = 56,
-    this.gradient,
+    this.color,
   });
 
   @override
   Widget build(BuildContext context) {
     final isEnabled = !isLoading && !isDisabled && onTap != null;
+    final theme = Theme.of(context);
+    final bgColor = isEnabled ? (color ?? theme.colorScheme.primary) : theme.disabledColor;
+    final fgColor = isEnabled ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface.withOpacity(0.38);
+
     return GestureDetector(
       onTap: isEnabled ? onTap : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+      child: Container(
         width: width ?? double.infinity,
         height: height,
         decoration: BoxDecoration(
-          gradient: isEnabled
-              ? (gradient ?? null)
-              : null,
-          color: isEnabled ? null : AppColors.border,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: isEnabled
-              ? [
-                  BoxShadow(
-                    color: AppColors.primary.withOpacity(0.35),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  )
-                ]
-              : null,
+          color: bgColor,
+          borderRadius: BorderRadius.zero,
+          border: Border.all(color: theme.colorScheme.onSurface, width: 2),
         ),
         child: Center(
           child: isLoading
-              ? const SizedBox(
+              ? SizedBox(
                   width: 22,
                   height: 22,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation(Colors.white),
+                    valueColor: AlwaysStoppedAnimation(fgColor),
                   ),
                 )
               : Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (icon != null) ...[
-                      Icon(icon, color: Colors.white, size: 20),
+                      Icon(icon, color: fgColor, size: 20),
                       const SizedBox(width: 8),
                     ],
                     Text(
                       label,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Nunito',
                         fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        letterSpacing: 0.3,
+                        fontWeight: FontWeight.w800,
+                        color: fgColor,
+                        letterSpacing: 0.5,
                       ),
                     ),
                   ],
@@ -105,15 +97,17 @@ class SecondaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? AppColors.primary;
+    final theme = Theme.of(context);
+    final c = color ?? theme.colorScheme.onSurface;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: width ?? double.infinity,
         height: 56,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: c, width: 1.5),
+          color: Colors.transparent,
+          borderRadius: BorderRadius.zero,
+          border: Border.all(color: c, width: 2),
         ),
         child: Center(
           child: Row(
@@ -128,7 +122,7 @@ class SecondaryButton extends StatelessWidget {
                 style: TextStyle(
                   fontFamily: 'Nunito',
                   fontSize: 16,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                   color: c,
                 ),
               ),
@@ -162,20 +156,21 @@ class IconActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final widget = GestureDetector(
       onTap: onTap,
       child: Container(
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: backgroundColor ?? AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(size / 3),
-          border: Border.all(color: AppColors.border),
+          color: backgroundColor ?? theme.colorScheme.surface,
+          borderRadius: BorderRadius.zero,
+          border: Border.all(color: theme.colorScheme.onSurface, width: 1.5),
         ),
         child: Icon(
           icon,
-          color: color ?? AppColors.textSecondary,
-          size: size * 0.48,
+          color: color ?? theme.colorScheme.onSurface,
+          size: size * 0.5,
         ),
       ),
     );
@@ -188,77 +183,39 @@ class IconActionButton extends StatelessWidget {
 
 // ─── Crisis SOS Button ────────────────────────────────────
 
-class SosButton extends StatefulWidget {
+class SosButton extends StatelessWidget {
   final VoidCallback onTap;
   const SosButton({super.key, required this.onTap});
 
   @override
-  State<SosButton> createState() => _SosButtonState();
-}
-
-class _SosButtonState extends State<SosButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _pulse;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulse = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 1),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _pulse,
-      builder: (_, child) => Transform.scale(
-        scale: 1.0 + (_pulse.value * 0.05),
-        child: child,
-      ),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          width: 100,
-          height: 100,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: const RadialGradient(
-              colors: [Color(0xFFFF6B6B), Color(0xFFCC4A4A)],
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 100,
+        height: 100,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.error,
+          borderRadius: BorderRadius.zero,
+          border: Border.all(color: theme.colorScheme.onSurface, width: 3),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.phone_rounded, color: theme.colorScheme.onError, size: 32),
+            const SizedBox(height: 4),
+            Text(
+              'SOS',
+              style: TextStyle(
+                fontFamily: 'Nunito',
+                color: theme.colorScheme.onError,
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
+              ),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.error.withOpacity(0.5),
-                blurRadius: 20,
-                spreadRadius: 4,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: const Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.phone_rounded, color: Colors.white, size: 32),
-              SizedBox(height: 4),
-              Text(
-                'SOS',
-                style: TextStyle(
-                  fontFamily: 'Nunito',
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.5,
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );

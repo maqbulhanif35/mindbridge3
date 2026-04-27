@@ -255,7 +255,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     try {
       final aiContent = state.useLocalModel
           ? await _callOllama(
-              history: history,
+              history: [],
               userContent: content.trim(),
               systemPrompt: _buildLocalSystemPrompt(),
             )

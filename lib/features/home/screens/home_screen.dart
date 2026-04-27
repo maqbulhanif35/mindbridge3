@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -351,7 +350,7 @@ class _MayaHeroHeader extends ConsumerWidget {
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.18),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.zero,
                 ),
                 child: Text(
                   DateFormat('EEE, MMMM d').format(DateTime.now()),
@@ -389,10 +388,8 @@ class _MayaHeroHeader extends ConsumerWidget {
                 ),
               ),
             ],
-          )
-              .animate()
-              .fadeIn(duration: 400.ms)
-              .slideY(begin: -0.15, end: 0),
+          ),
+              
 
           const SizedBox(height: 18),
 
@@ -471,7 +468,7 @@ class _HeroStatTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.zero,
           border:
               Border.all(color: Colors.white.withOpacity(0.25)),
         ),
@@ -529,13 +526,6 @@ class _HeroStatTile extends StatelessWidget {
           ],
         ),
       )
-          .animate()
-          .fadeIn(
-              delay: Duration(milliseconds: delay), duration: 400.ms)
-          .scale(
-              begin: const Offset(0.88, 0.88),
-              end: const Offset(1.0, 1.0),
-              curve: Curves.easeOutBack),
     );
   }
 }
@@ -642,7 +632,7 @@ class _MayaMessageCardBody extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.zero,
           border: Border.all(color: AppColors.primary.withOpacity(0.2)),
           boxShadow: [
             BoxShadow(
@@ -667,7 +657,7 @@ class _MayaMessageCardBody extends StatelessWidget {
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.zero,
                   ),
                   child:
                       const Icon(LucideIcons.bot, color: Colors.white, size: 22),
@@ -715,7 +705,7 @@ class _MayaMessageCardBody extends StatelessWidget {
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.zero,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -782,7 +772,7 @@ class _MayaMessageCardBody extends StatelessWidget {
                                   horizontal: 12, vertical: 7),
                               decoration: BoxDecoration(
                                 color: AppColors.primaryContainer,
-                                borderRadius: BorderRadius.circular(20),
+                                borderRadius: BorderRadius.zero,
                                 border: Border.all(
                                     color:
                                         AppColors.primary.withOpacity(0.2)),
@@ -813,10 +803,7 @@ class _MayaMessageCardBody extends StatelessWidget {
           ],
         ),
       ),
-    )
-        .animate()
-        .fadeIn(delay: 150.ms, duration: 500.ms)
-        .slideY(begin: 0.08, end: 0, curve: Curves.easeOutCubic);
+    );
   }
 }
 
@@ -882,7 +869,7 @@ class _QuickActionsGrid extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: AppColors.primaryContainer,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.zero,
                   ),
                   child: Text(
                     'sorted for you',
@@ -949,7 +936,7 @@ class _QGridCard extends StatelessWidget {
                   )
                 : null,
             color: action.featured ? null : Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.zero,
             border: action.featured
                 ? null
                 : Border.all(color: action.color.withOpacity(0.2)),
@@ -973,7 +960,7 @@ class _QGridCard extends StatelessWidget {
                   color: action.featured
                       ? Colors.white.withOpacity(0.2)
                       : action.color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.zero,
                 ),
                 child: Icon(
                   action.icon,
@@ -998,14 +985,7 @@ class _QGridCard extends StatelessWidget {
           ),
         ),
       ),
-    )
-        .animate()
-        .fadeIn(
-            delay: Duration(milliseconds: 300 + delay), duration: 350.ms)
-        .scale(
-            begin: const Offset(0.9, 0.9),
-            end: const Offset(1, 1),
-            curve: Curves.easeOutBack);
+    );
   }
 }
 
@@ -1042,7 +1022,7 @@ class _TrendAlert extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: color.withOpacity(0.07),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.zero,
         border: Border.all(color: color.withOpacity(0.25)),
       ),
       child: Row(
@@ -1052,7 +1032,7 @@ class _TrendAlert extends StatelessWidget {
             height: 36,
             decoration: BoxDecoration(
               color: color.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.zero,
             ),
             child: Icon(icon, color: color, size: 18),
           ),
@@ -1086,7 +1066,7 @@ class _TrendAlert extends StatelessWidget {
           ),
         ],
       ),
-    ).animate().fadeIn(delay: 450.ms).slideX(begin: -0.05, end: 0);
+    );
   }
 }
 
@@ -1109,7 +1089,7 @@ class _WellnessSummaryCard extends ConsumerWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.zero,
         border: Border.all(color: AppColors.border),
         boxShadow: const [
           BoxShadow(
@@ -1139,7 +1119,7 @@ class _WellnessSummaryCard extends ConsumerWidget {
                         height: 52,
                         decoration: BoxDecoration(
                           color: moodColor.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.zero,
                         ),
                         child: Center(
                           child: today != null
@@ -1297,7 +1277,7 @@ class _WellnessSummaryCard extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(100),
+                      borderRadius: BorderRadius.zero,
                       child: LinearProgressIndicator(
                         value: (c.$2 / 100).clamp(0.0, 1.0),
                         backgroundColor: c.$3.withOpacity(0.1),
@@ -1312,10 +1292,7 @@ class _WellnessSummaryCard extends ConsumerWidget {
           ],
         ],
       ),
-    )
-        .animate()
-        .fadeIn(delay: 350.ms, duration: 500.ms)
-        .slideY(begin: 0.08, end: 0, curve: Curves.easeOutCubic);
+    );
   }
 }
 
@@ -1388,7 +1365,7 @@ class _MoodStrip7Day extends StatelessWidget {
                       color: entry != null
                           ? MoodTokens.colorFor(entry.moodScore).withOpacity(0.15)
                           : const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.zero,
                       border: isToday
                           ? Border.all(color: AppColors.primary, width: 1.5)
                           : null,
@@ -1404,7 +1381,7 @@ class _MoodStrip7Day extends StatelessWidget {
                               height: 8,
                               decoration: BoxDecoration(
                                 color: const Color(0xFFCBD5E1),
-                                borderRadius: BorderRadius.circular(4),
+                                borderRadius: BorderRadius.zero,
                               ),
                             ),
                     ),
@@ -1480,7 +1457,7 @@ class _InsightsRow extends ConsumerWidget {
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: AppColors.primaryContainer,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.zero,
                 ),
                 child: const Text(
                   'Log more to unlock',
@@ -1510,12 +1487,12 @@ class _InsightsRow extends ConsumerWidget {
                   insight: ins,
                   color: _colorFor(ins.type),
                   icon: _iconFor(ins.type),
-                ).animate().fadeIn(delay: (200 + i * 80).ms, duration: 350.ms),
+                )
               );
             }).toList(),
           ),
       ],
-    ).animate().fadeIn(delay: 400.ms, duration: 400.ms);
+    );
   }
 }
 
@@ -1536,7 +1513,7 @@ class _InsightCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.zero,
         border: Border.all(color: color.withOpacity(0.15)),
         boxShadow: const [
           BoxShadow(
@@ -1558,7 +1535,7 @@ class _InsightCard extends StatelessWidget {
                 end: Alignment.bottomRight,
                 colors: [color.withOpacity(0.75), color],
               ),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.zero,
             ),
             child: Icon(icon, color: Colors.white, size: 21),
           ),
@@ -1573,7 +1550,7 @@ class _InsightCard extends StatelessWidget {
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.zero,
                   ),
                   child: Text(
                     insight.title,
@@ -1618,7 +1595,7 @@ class _InsightsEmpty extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.primaryContainer,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.zero,
         border: Border.all(color: AppColors.primary.withOpacity(0.15)),
       ),
       child: Row(
@@ -1628,7 +1605,7 @@ class _InsightsEmpty extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               color: AppColors.primary.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.zero,
             ),
             child: const Icon(LucideIcons.chartBar,
                 color: AppColors.primary, size: 22),
@@ -1726,7 +1703,7 @@ class _ChallengesSection extends ConsumerWidget {
                 color: completedCount == 5
                     ? const Color(0xFF10B981).withOpacity(0.12)
                     : AppColors.primaryContainer,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.zero,
               ),
               child: Text(
                 completedCount == 5
@@ -1748,7 +1725,7 @@ class _ChallengesSection extends ConsumerWidget {
 
         // ── XP progress bar ──
         ClipRRect(
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: BorderRadius.zero,
           child: LinearProgressIndicator(
             value: totalXp > 0 ? earnedXp / totalXp : 0,
             backgroundColor: AppColors.primaryContainer,
@@ -1793,7 +1770,7 @@ class _ChallengesSection extends ConsumerWidget {
           );
         }),
       ],
-    ).animate().fadeIn(delay: 550.ms, duration: 400.ms);
+    );
   }
 }
 
@@ -1815,7 +1792,7 @@ class _CompleteProfileBanner extends StatelessWidget {
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
           ),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.zero,
           boxShadow: [
             BoxShadow(
               color: AppColors.primary.withValues(alpha: 0.25),
@@ -1831,7 +1808,7 @@ class _CompleteProfileBanner extends StatelessWidget {
               height: 36,
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.20),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.zero,
               ),
               child: const Icon(
                 LucideIcons.userRoundCog,
@@ -1871,7 +1848,7 @@ class _CompleteProfileBanner extends StatelessWidget {
           ],
         ),
       ),
-    ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.1);
+    );
   }
 }
 
@@ -1890,7 +1867,7 @@ class _CrisisBanner extends ConsumerWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.zero,
         border: Border.all(color: color.withOpacity(0.4), width: 1.5),
       ),
       child: Row(
@@ -1921,7 +1898,7 @@ class _CrisisBanner extends ConsumerWidget {
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: color,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.zero,
               ),
               child: const Text(
                 'Get Help',
@@ -1936,7 +1913,7 @@ class _CrisisBanner extends ConsumerWidget {
           ),
         ],
       ),
-    ).animate().fadeIn(duration: 300.ms).slideY(begin: -0.1, end: 0);
+    );
   }
 }
 
@@ -1992,7 +1969,7 @@ class _ChallengeTile extends StatelessWidget {
             color: isDone
                 ? const Color(0xFFF0FFF6)
                 : Colors.white,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.zero,
             border: Border.all(
               color: isDone
                   ? AppColors.success.withOpacity(0.35)
@@ -2025,7 +2002,7 @@ class _ChallengeTile extends StatelessWidget {
                             data.categoryColor,
                           ],
                   ),
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.zero,
                   boxShadow: [
                     BoxShadow(
                       color: (isDone ? AppColors.success : data.categoryColor)
@@ -2080,7 +2057,7 @@ class _ChallengeTile extends StatelessWidget {
                         horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: data.categoryColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.zero,
                     ),
                     child: Text(
                       data.category,
@@ -2103,7 +2080,7 @@ class _ChallengeTile extends StatelessWidget {
                           color: onComplete != null
                               ? AppColors.success.withOpacity(0.1)
                               : data.categoryColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.zero,
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -2149,10 +2126,7 @@ class _ChallengeTile extends StatelessWidget {
           ),
         ),
       ),
-    )
-        .animate()
-        .fadeIn(delay: Duration(milliseconds: delay), duration: 400.ms)
-        .slideY(begin: 0.1, end: 0, curve: Curves.easeOutCubic);
+    );
   }
 }
 
@@ -2273,7 +2247,7 @@ class _KenyanAcademicBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: data.bgColor,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.zero,
         border: Border.all(color: data.color.withOpacity(0.3), width: 1),
       ),
       child: Row(
@@ -2314,7 +2288,7 @@ class _KenyanAcademicBanner extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: data.color,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.zero,
               ),
               child: Text(
                 data.cta,
@@ -2329,7 +2303,7 @@ class _KenyanAcademicBanner extends StatelessWidget {
           ),
         ],
       ),
-    ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.1, end: 0);
+    );
   }
 }
 
@@ -2373,7 +2347,7 @@ class _FiveMinRescue extends ConsumerWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.zero,
         border: Border.all(color: accentColor.withOpacity(0.22), width: 1),
       ),
       child: Column(
@@ -2385,7 +2359,7 @@ class _FiveMinRescue extends ConsumerWidget {
                 padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
                   color: accentColor.withOpacity(0.14),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.zero,
                 ),
                 child: Text(headline.emoji,
                     style: const TextStyle(fontSize: 15)),
@@ -2436,7 +2410,7 @@ class _FiveMinRescue extends ConsumerWidget {
           ),
         ],
       ),
-    ).animate().fadeIn(delay: 150.ms, duration: 400.ms).slideY(begin: 0.08, end: 0);
+    );
   }
 }
 
@@ -2464,7 +2438,7 @@ class _RescueChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: primary ? AppColors.primary : Colors.white,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.zero,
           border: Border.all(
             color: primary
                 ? AppColors.primary
@@ -2534,7 +2508,7 @@ class _ForYouSectionState extends ConsumerState<_ForYouSection> {
                 gradient: const LinearGradient(
                   colors: [AppColors.primaryDark, AppColors.primary],
                 ),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.zero,
               ),
               child: const Icon(LucideIcons.sparkles, size: 16, color: Colors.white),
             ),
@@ -2570,7 +2544,7 @@ class _ForYouSectionState extends ConsumerState<_ForYouSection> {
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: AppColors.primaryContainer,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.zero,
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
@@ -2641,7 +2615,7 @@ class _ArticleCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.zero,
           border: Border.all(color: AppColors.border),
           boxShadow: [
             BoxShadow(
@@ -2674,7 +2648,7 @@ class _ArticleCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: color.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.zero,
                         ),
                         child: Text(
                           article.category,
@@ -2730,7 +2704,7 @@ class _ArticleCard extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
                     decoration: BoxDecoration(
                       color: color.withOpacity(0.07),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.zero,
                       border: Border.all(color: color.withOpacity(0.2)),
                     ),
                     child: Row(
@@ -2761,7 +2735,7 @@ class _ArticleCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                         decoration: BoxDecoration(
                           color: color,
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.zero,
                         ),
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
@@ -2780,7 +2754,7 @@ class _ArticleCard extends StatelessWidget {
           ],
         ),
       ),
-    ).animate().fadeIn(delay: Duration(milliseconds: delay), duration: 400.ms).slideY(begin: 0.1, end: 0);
+    );
   }
 
   void _showArticleSheet(BuildContext context, DailyArticle article, Color color) {
@@ -2818,7 +2792,7 @@ class _ArticleDetailSheet extends StatelessWidget {
             Container(
               width: 40, height: 4,
               margin: const EdgeInsets.only(top: 12, bottom: 8),
-              decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.zero),
             ),
             // Accent bar
             Container(
@@ -2826,7 +2800,7 @@ class _ArticleDetailSheet extends StatelessWidget {
               margin: const EdgeInsets.symmetric(horizontal: 24),
               decoration: BoxDecoration(
                 color: color,
-                borderRadius: BorderRadius.circular(2),
+                borderRadius: BorderRadius.zero,
               ),
             ),
             Expanded(
@@ -2841,7 +2815,7 @@ class _ArticleDetailSheet extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: color.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.zero,
                         ),
                         child: Text(article.category, style: TextStyle(fontFamily: 'Nunito', fontSize: 12, fontWeight: FontWeight.w700, color: color)),
                       ),
@@ -2862,7 +2836,7 @@ class _ArticleDetailSheet extends StatelessWidget {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: color.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.zero,
                       border: Border.all(color: color.withOpacity(0.25)),
                     ),
                     child: Row(
@@ -2900,7 +2874,7 @@ class _ArticleDetailSheet extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       decoration: BoxDecoration(
                         color: color,
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.zero,
                       ),
                       child: const Center(
                         child: Text('Done', style: TextStyle(fontFamily: 'Nunito', fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
@@ -2928,11 +2902,10 @@ class _ArticleSkeletonList extends StatelessWidget {
         height: 160,
         decoration: BoxDecoration(
           color: AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.zero,
         ),
-      ).animate(onPlay: (c) => c.repeat(reverse: true))
-        .shimmer(duration: 1200.ms, color: Colors.white.withOpacity(0.5))),
-    );
+      )
+          ));
   }
 }
 
@@ -2946,7 +2919,7 @@ class _ArticleEmptyCard extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: AppColors.primaryContainer,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.zero,
         border: Border.all(color: AppColors.primary.withOpacity(0.2)),
       ),
       child: Column(
@@ -2961,7 +2934,7 @@ class _ArticleEmptyCard extends StatelessWidget {
             onTap: onGenerate,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(20)),
+              decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.zero),
               child: const Text('Generate Now', style: TextStyle(fontFamily: 'Nunito', fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
             ),
           ),
@@ -2981,7 +2954,7 @@ class _ArticleErrorCard extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.surfaceVariant,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.zero,
         border: Border.all(color: AppColors.border),
       ),
       child: Row(
@@ -3018,7 +2991,7 @@ class _DailyAffirmation extends ConsumerWidget {
           end: Alignment.bottomRight,
           colors: [Color(0xFF00BEB4), Color(0xFF0EA5E9)],
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.zero,
         boxShadow: [
           BoxShadow(
             color: AppColors.primary.withOpacity(0.22),
@@ -3053,7 +3026,7 @@ class _DailyAffirmation extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.zero,
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
@@ -3096,7 +3069,7 @@ class _DailyAffirmation extends ConsumerWidget {
           ),
         ],
       ),
-    ).animate().fadeIn(delay: 250.ms, duration: 400.ms);
+    );
   }
 }
 
@@ -3134,7 +3107,7 @@ class _CommunityPreviewCard extends StatelessWidget {
             end: Alignment.bottomRight,
             colors: [Color(0xFFFFF0F0), Color(0xFFFFF8F0)],
           ),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.zero,
           border: Border.all(color: const Color(0xFFFF6B6B).withOpacity(0.25)),
           boxShadow: const [
             BoxShadow(
@@ -3152,7 +3125,7 @@ class _CommunityPreviewCard extends StatelessWidget {
                   end: Alignment.bottomRight,
                   colors: [Color(0xFFFF8C8C), Color(0xFFFF6B6B)],
                 ),
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.zero,
                 boxShadow: const [
                   BoxShadow(
                       color: Color(0x30FF6B6B),
@@ -3197,7 +3170,7 @@ class _CommunityPreviewCard extends StatelessWidget {
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: const Color(0xFFFF6B6B),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.zero,
                 boxShadow: const [
                   BoxShadow(
                       color: Color(0x35FF6B6B),
@@ -3225,7 +3198,7 @@ class _CommunityPreviewCard extends StatelessWidget {
           ],
         ),
       ),
-    ).animate().fadeIn(delay: 600.ms, duration: 400.ms).slideY(begin: 0.08, end: 0);
+    );
   }
 }
 
@@ -3256,7 +3229,7 @@ class _TodaysFocusCard extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: AppRadius.lgAll,
+          borderRadius: BorderRadius.zero,
           border: Border.all(color: color.withOpacity(0.3)),
           boxShadow: [
             BoxShadow(
@@ -3273,7 +3246,7 @@ class _TodaysFocusCard extends StatelessWidget {
               height: 46,
               decoration: BoxDecoration(
                 color: color.withOpacity(0.2),
-                borderRadius: AppRadius.mdAll,
+                borderRadius: BorderRadius.zero,
               ),
               child: Center(
                 child: Text(focus.emoji, style: const TextStyle(fontSize: 22)),
@@ -3291,7 +3264,7 @@ class _TodaysFocusCard extends StatelessWidget {
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: color.withOpacity(0.15),
-                          borderRadius: AppRadius.pillAll,
+                          borderRadius: BorderRadius.zero,
                         ),
                         child: Text(
                           "TODAY'S FOCUS",
@@ -3332,7 +3305,7 @@ class _TodaysFocusCard extends StatelessWidget {
                   horizontal: Spacing.sm, vertical: Spacing.xs),
               decoration: BoxDecoration(
                 color: color.withOpacity(0.15),
-                borderRadius: AppRadius.pillAll,
+                borderRadius: BorderRadius.zero,
                 border: Border.all(color: color.withOpacity(0.3)),
               ),
               child: Row(
@@ -3353,7 +3326,7 @@ class _TodaysFocusCard extends StatelessWidget {
             ),
           ],
         ),
-      ).animate().fadeIn(duration: 350.ms).slideY(begin: 0.08, end: 0),
+      )
     );
   }
 
@@ -3416,7 +3389,7 @@ class _GoalFocusStrip extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: item.color.withOpacity(0.10),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.zero,
                       border: Border.all(color: item.color.withOpacity(0.3)),
                     ),
                     child: Row(
@@ -3444,7 +3417,7 @@ class _GoalFocusStrip extends StatelessWidget {
           ),
         ),
       ],
-    ).animate().fadeIn(delay: 60.ms, duration: 350.ms).slideX(begin: -0.05, end: 0);
+    );
   }
 }
 
@@ -3464,7 +3437,7 @@ class _GoalProgressCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.zero,
         border: Border.all(color: AppColors.border),
         boxShadow: const [
           BoxShadow(color: Color(0x08000000), blurRadius: 10, offset: Offset(0, 3)),
@@ -3482,7 +3455,7 @@ class _GoalProgressCard extends StatelessWidget {
                   gradient: const LinearGradient(
                     colors: [AppColors.primaryDark, AppColors.primary],
                   ),
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.zero,
                 ),
                 child: const Icon(LucideIcons.target, size: 15, color: Colors.white),
               ),
@@ -3549,7 +3522,7 @@ class _GoalProgressCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 5),
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(100),
+                    borderRadius: BorderRadius.zero,
                     child: LinearProgressIndicator(
                       value: item.progress,
                       backgroundColor: item.color.withOpacity(0.12),
@@ -3585,7 +3558,7 @@ class _GoalProgressCard extends StatelessWidget {
                 gradient: const LinearGradient(
                   colors: [AppColors.primaryDark, AppColors.primary],
                 ),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.zero,
               ),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -3609,7 +3582,7 @@ class _GoalProgressCard extends StatelessWidget {
           ),
         ],
       ),
-    ).animate().fadeIn(delay: 300.ms, duration: 450.ms).slideY(begin: 0.08, end: 0);
+    );
   }
 }
 
@@ -3651,7 +3624,7 @@ class _PersonalizedAlertCard extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: bgColor,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.zero,
               border: Border.all(color: borderColor.withOpacity(0.25)),
             ),
             child: Row(
@@ -3661,7 +3634,7 @@ class _PersonalizedAlertCard extends StatelessWidget {
                   width: 32, height: 32,
                   decoration: BoxDecoration(
                     color: iconColor.withOpacity(0.14),
-                    borderRadius: BorderRadius.circular(9),
+                    borderRadius: BorderRadius.zero,
                   ),
                   child: Icon(alert.icon, size: 16, color: iconColor),
                 ),
@@ -3700,7 +3673,7 @@ class _PersonalizedAlertCard extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                             decoration: BoxDecoration(
                               color: iconColor,
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.zero,
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -3726,7 +3699,7 @@ class _PersonalizedAlertCard extends StatelessWidget {
                 ),
               ],
             ),
-          ).animate().fadeIn(duration: 300.ms).slideY(begin: -0.05, end: 0),
+          )
         );
       }).toList(),
     );
@@ -3812,7 +3785,7 @@ class _TodayActivityRings extends ConsumerWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.zero,
         border: Border.all(
           color: allDone
               ? AppColors.success.withOpacity(0.4)
@@ -3842,7 +3815,7 @@ class _TodayActivityRings extends ConsumerWidget {
                   color: allDone
                       ? AppColors.success.withOpacity(0.12)
                       : AppColors.primaryContainer,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.zero,
                 ),
                 child: Icon(
                   allDone ? LucideIcons.circleCheck : LucideIcons.zap,
@@ -3871,7 +3844,7 @@ class _TodayActivityRings extends ConsumerWidget {
                       : doneCount > 0
                           ? AppColors.primaryContainer
                           : const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.zero,
                 ),
                 child: Text(
                   allDone
@@ -3901,23 +3874,14 @@ class _TodayActivityRings extends ConsumerWidget {
               final ring = entry.value;
               return _ActivityRingCell(
                 data: ring,
-              )
-                  .animate()
-                  .fadeIn(
-                    delay: Duration(milliseconds: 200 + ring.delay),
-                    duration: 400.ms,
-                  )
-                  .scale(
-                    begin: const Offset(0.7, 0.7),
-                    curve: Curves.easeOutBack,
-                  );
+              );
             }).toList(),
           ),
 
           // ── Completion bar ──
           const SizedBox(height: 16),
           ClipRRect(
-            borderRadius: BorderRadius.circular(100),
+            borderRadius: BorderRadius.zero,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 600),
               child: LinearProgressIndicator(
@@ -3932,10 +3896,7 @@ class _TodayActivityRings extends ConsumerWidget {
           ),
         ],
       ),
-    )
-        .animate()
-        .fadeIn(delay: 100.ms, duration: 500.ms)
-        .slideY(begin: 0.06, end: 0, curve: Curves.easeOutCubic);
+    );
   }
 }
 
@@ -4073,7 +4034,7 @@ class _MomentumCard extends ConsumerWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.zero,
         border: Border.all(color: AppColors.border),
         boxShadow: const [
           BoxShadow(
@@ -4134,7 +4095,7 @@ class _MomentumCard extends ConsumerWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.zero,
             ),
             child: Row(
               children: [
@@ -4179,7 +4140,7 @@ class _MomentumCard extends ConsumerWidget {
                       const SizedBox(height: 6),
                       // Milestone progress
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(100),
+                        borderRadius: BorderRadius.zero,
                         child: LinearProgressIndicator(
                           value: progress.clamp(0.0, 1.0),
                           backgroundColor: Colors.white.withOpacity(0.25),
@@ -4238,7 +4199,7 @@ class _MomentumCard extends ConsumerWidget {
                   color: completedToday
                       ? color.withOpacity(0.08)
                       : const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.zero,
                   border: Border.all(
                     color: completedToday
                         ? color.withOpacity(0.3)
@@ -4298,10 +4259,7 @@ class _MomentumCard extends ConsumerWidget {
           ),
         ],
       ),
-    )
-        .animate()
-        .fadeIn(delay: 500.ms, duration: 500.ms)
-        .slideY(begin: 0.08, end: 0, curve: Curves.easeOutCubic);
+    );
   }
 }
 
@@ -4432,7 +4390,7 @@ class _SmartNudgeCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: nudge.color.withOpacity(0.07),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.zero,
           border: Border.all(color: nudge.color.withOpacity(0.25)),
         ),
         child: Row(
@@ -4472,7 +4430,7 @@ class _SmartNudgeCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: nudge.color,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.zero,
               ),
               child: Text(
                 nudge.actionLabel,
@@ -4487,9 +4445,6 @@ class _SmartNudgeCard extends StatelessWidget {
           ],
         ),
       )
-          .animate()
-          .fadeIn(delay: 300.ms, duration: 400.ms)
-          .slideX(begin: -0.05, end: 0),
     );
   }
 }

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 abstract class AppColors {
   // ─── Gruvbox Light Palette ────────────────────────────────
-  static const Color gruvboxLightBg = Color(0xFFF8F1C2);
-  static const Color gruvboxLightFg = Color(0xFF3C3C3C);
+  static const Color gruvboxLightBg = Color(0xFFFBF1C7);
+  static const Color gruvboxLightFg = Color(0xFF3C3836);
   static const Color gruvboxLightRed = Color(0xFFCC241D);
   static const Color gruvboxLightGreen = Color(0xFF98971A);
   static const Color gruvboxLightYellow = Color(0xFFD79921);
@@ -26,79 +26,79 @@ abstract class AppColors {
   static const Color gruvboxDarkOrange = Color(0xFFFE8019);
 
   static const Color primary = gruvboxLightYellow;
-  static const Color primaryLight = Color(0xFFF2D12F);
-  static const Color primaryDark = gruvboxLightYellow;
-  static const Color primaryContainer = Color(0xFFE6D9B8);
+  static const Color primaryLight = Color(0xFFFABD2F);
+  static const Color primaryDark = Color(0xFFB57614);
+  static const Color primaryContainer = Color(0xFFEBDBB2);
 
   static const Color secondary = gruvboxLightRed;
-  static const Color secondaryLight = Color(0xFFDA4A3D);
-  static const Color secondaryDark = gruvboxLightRed;
-  static const Color secondaryContainer = Color(0xFFF1D8D5);
+  static const Color secondaryLight = Color(0xFFFB4934);
+  static const Color secondaryDark = Color(0xFF9D0006);
+  static const Color secondaryContainer = Color(0xFFF9F5D7);
 
   static const Color tertiary = gruvboxLightBlue;
-  static const Color tertiaryLight = Color(0xFF5A9A94);
-  static const Color tertiaryDark = gruvboxLightBlue;
-  static const Color tertiaryContainer = Color(0xFFD1E3E1);
+  static const Color tertiaryLight = Color(0xFF83A598);
+  static const Color tertiaryDark = Color(0xFF076678);
+  static const Color tertiaryContainer = Color(0xFFD5E4DE);
 
   // ─── Dark Theme Aliases ─────────────────────────────────
   static const Color darkPrimary = gruvboxDarkYellow;
   static const Color darkPrimaryLight = gruvboxDarkYellow;
-  static const Color darkPrimaryDark = gruvboxDarkYellow;
-  static const Color darkPrimaryContainer = Color(0xFF3A3521);
+  static const Color darkPrimaryDark = Color(0xFFD79921);
+  static const Color darkPrimaryContainer = Color(0xFF3C3836);
 
   static const Color darkSecondary = gruvboxDarkRed;
-  static const Color darkSecondaryLight = Color(0xFFFC6954);
-  static const Color darkSecondaryDark = gruvboxDarkRed;
-  static const Color darkSecondaryContainer = Color(0xFF3D2421);
+  static const Color darkSecondaryLight = Color(0xFFFB4934);
+  static const Color darkSecondaryDark = Color(0xFFCC241D);
+  static const Color darkSecondaryContainer = Color(0xFF3C3836);
 
   static const Color darkTertiary = gruvboxDarkBlue;
-  static const Color darkTertiaryLight = Color(0xFF9AB9A8);
-  static const Color darkTertiaryDark = gruvboxDarkBlue;
-  static const Color darkTertiaryContainer = Color(0xFF24302D);
+  static const Color darkTertiaryLight = Color(0xFF83A598);
+  static const Color darkTertiaryDark = Color(0xFF458588);
+  static const Color darkTertiaryContainer = Color(0xFF3C3836);
 
   // ─── Semantic Colors (Light) ──────────────────────────────
   static const Color warning = gruvboxLightOrange;
-  static const Color warningContainer = Color(0xFFF5E6D3);
+  static const Color warningContainer = Color(0xFFF9F5D7);
   static const Color success = gruvboxLightGreen;
-  static const Color successContainer = Color(0xFFE6EDD4);
+  static const Color successContainer = Color(0xFFF9F5D7);
   static const Color error = gruvboxLightRed;
-  static const Color errorContainer = Color(0xFFF1D8D5);
+  static const Color errorContainer = Color(0xFFF9F5D7);
   static const Color info = gruvboxLightBlue;
-  static const Color infoContainer = Color(0xFFD1E3E1);
+  static const Color infoContainer = Color(0xFFF9F5D7);
 
   // ─── Semantic Colors (Dark) ───────────────────────────────
   static const Color warningDark = gruvboxDarkOrange;
-  static const Color warningContainerDark = Color(0xFF3D2E21);
+  static const Color warningContainerDark = Color(0xFF3C3836);
   static const Color successDark = gruvboxDarkGreen;
-  static const Color successContainerDark = Color(0xFF2D3521);
+  static const Color successContainerDark = Color(0xFF3C3836);
   static const Color errorDark = gruvboxDarkRed;
-  static const Color errorContainerDark = Color(0xFF3D2421);
+  static const Color errorContainerDark = Color(0xFF3C3836);
   static const Color infoDark = gruvboxDarkBlue;
-  static const Color infoContainerDark = Color(0xFF24302D);
+  static const Color infoContainerDark = Color(0xFF3C3836);
 
   // ─── Backgrounds (Light) ─────────────────────────────────
   static const Color background = gruvboxLightBg;
-  static const Color surface = Color(0xFFF9F0DC);
-  static const Color surfaceVariant = Color(0xFFE8DFC4);
+  static const Color surface = Color(0xFFF2E5BC);
+  static const Color surfaceVariant = Color(0xFFEBDBB2);
 
   // ─── Backgrounds (Dark) ──────────────────────────────────
   static const Color backgroundDark = gruvboxDarkBg;
   static const Color surfaceDark = Color(0xFF282828);
-  static const Color surfaceVariantDark = Color(0xFF32302C);
+  static const Color surfaceVariantDark = Color(0xFF3C3836);
 
   // ─── Text (Light) ─────────────────────────────────────────
   static const Color textPrimary = gruvboxLightFg;
-  static const Color textSecondary = Color(0xFF5A5247);
-  static const Color textMuted = Color(0xFF9A8F79);
+  static const Color textSecondary = Color(0xFF504945);
+  static const Color textMuted = Color(0xFF7C6F64);
   static const Color textPrimaryDark = gruvboxDarkFg;
   static const Color textSecondaryDark = Color(0xFFA89984);
-  static const Color textMutedDark = Color(0xFF6F6A5A);
+  static const Color textMutedDark = Color(0xFF928374);
 
   // ─── Borders & Dividers (Light) ───────────────────────────
-  static const Color border = Color(0xFFD4C9B3);
-  static const Color divider = Color(0xFFDDD4BC);
-  static const Color borderDark = Color(0xFF454038);
-  static const Color dividerDark = Color(0xFF3A352D);
+  static const Color border = Color(0xFFD5C4A1);
+  static const Color divider = Color(0xFFBDAE93);
+  static const Color borderDark = Color(0xFF504945);
+  static const Color dividerDark = Color(0xFF3C3836);
 
   // ─── Mood Scale Colors (1-10) ─────────────────────────
   static const List<Color> moodColors = [

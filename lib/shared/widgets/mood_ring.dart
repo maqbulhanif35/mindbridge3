@@ -1,15 +1,14 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/design_tokens.dart';
 
-/// Animated circular wellness score ring.
-/// Shows score as an arc with gradient fill and center stat display.
-class MoodRing extends StatefulWidget {
+/// Flat circular wellness score ring.
+/// Shows score as an arc with solid fill and center stat display.
+class MoodRing extends StatelessWidget {
   final double score; // 0–100
   final double size;
   final bool showLabel;
-  final bool animate;
+  final bool animate; // Ignored now
   final VoidCallback? onTap;
 
   const MoodRing({
@@ -17,145 +16,102 @@ class MoodRing extends StatefulWidget {
     required this.score,
     this.size = 120,
     this.showLabel = true,
-    this.animate = true,
+    this.animate = false,
     this.onTap,
   });
 
   @override
-  State<MoodRing> createState() => _MoodRingState();
-}
-
-class _MoodRingState extends State<MoodRing>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scoreAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
-    _scoreAnim = Tween<double>(begin: 0, end: widget.score / 100).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-    );
-    if (widget.animate) {
-      Future.delayed(const Duration(milliseconds: 200), () {
-        if (mounted) _controller.forward();
-      });
-    } else {
-      _controller.value = 1.0;
-    }
-  }
-
-  @override
-  void didUpdateWidget(MoodRing oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.score != widget.score) {
-      _scoreAnim = Tween<double>(
-        begin: oldWidget.score / 100,
-        end: widget.score / 100,
-      ).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-      );
-      _controller
-        ..reset()
-        ..forward();
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final band = WellnessTokens.bandFor(widget.score);
-    final gradient = WellnessTokens.gradientFor(band);
-    final strokeWidth = widget.size * 0.085;
+    final band = WellnessTokens.bandFor(score);
+    final color = WellnessTokens.colorFor(band);
+    final strokeWidth = size * 0.12;
+    final theme = Theme.of(context);
 
     return GestureDetector(
-      onTap: widget.onTap,
-      child: AnimatedBuilder(
-        animation: _scoreAnim,
-        builder: (context, child) => SizedBox(
-          width: widget.size,
-          height: widget.size,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Background track
-              CustomPaint(
-                size: Size(widget.size, widget.size),
-                painter: _RingTrackPainter(
-                  strokeWidth: strokeWidth,
-                  trackColor: context.tokenSurfaceVariant,
-                ),
+      onTap: onTap,
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Background track
+            CustomPaint(
+              size: Size(size, size),
+              painter: _RingTrackPainter(
+                strokeWidth: strokeWidth,
+                trackColor: theme.colorScheme.surfaceContainerHighest,
+                borderColor: theme.colorScheme.onSurface,
               ),
-              // Gradient filled arc
-              CustomPaint(
-                size: Size(widget.size, widget.size),
-                painter: _RingFillPainter(
-                  progress: _scoreAnim.value,
-                  strokeWidth: strokeWidth,
-                  gradient: gradient,
-                ),
+            ),
+            // Solid filled arc
+            CustomPaint(
+              size: Size(size, size),
+              painter: _RingFillPainter(
+                progress: score / 100,
+                strokeWidth: strokeWidth,
+                color: color,
+                borderColor: theme.colorScheme.onSurface,
               ),
-              // Center content
-              if (widget.showLabel) _buildCenterContent(context, band),
-            ],
-          ),
+            ),
+            // Center content
+            if (showLabel) _buildCenterContent(context, band),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildCenterContent(BuildContext context, WellnessBand band) {
+    final theme = Theme.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          widget.score.toInt().toString(),
+          score.toInt().toString(),
           style: TextStyle(
-            fontSize: widget.size * 0.22,
-            fontWeight: FontWeight.w800,
-            color: WellnessTokens.colorFor(band),
+            fontSize: size * 0.25,
+            fontWeight: FontWeight.w900,
+            color: theme.colorScheme.onSurface,
             height: 1,
           ),
         ),
         Text(
-          WellnessTokens.labelFor(band),
+          WellnessTokens.labelFor(band).toUpperCase(),
           style: TextStyle(
-            fontSize: widget.size * 0.09,
-            fontWeight: FontWeight.w600,
-            color: context.tokenTextSecondary,
+            fontSize: size * 0.08,
+            fontWeight: FontWeight.w800,
+            color: theme.colorScheme.onSurface,
+            letterSpacing: 1.0,
           ),
           textAlign: TextAlign.center,
         ),
       ],
-    ).animate().fadeIn(duration: 400.ms, delay: 600.ms);
+    );
   }
 }
 
 class _RingTrackPainter extends CustomPainter {
   final double strokeWidth;
   final Color trackColor;
+  final Color borderColor;
 
-  _RingTrackPainter({required this.strokeWidth, required this.trackColor});
+  _RingTrackPainter({
+    required this.strokeWidth,
+    required this.trackColor,
+    required this.borderColor,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width - strokeWidth) / 2;
+
+    // Track Fill
     final paint = Paint()
       ..color = trackColor
       ..strokeWidth = strokeWidth
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = (size.width - strokeWidth) / 2;
+      ..style = PaintingStyle.stroke;
 
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
@@ -163,6 +119,27 @@ class _RingTrackPainter extends CustomPainter {
       _sweepAngle,
       false,
       paint,
+    );
+
+    // Track Borders
+    final borderPaint = Paint()
+      ..color = borderColor
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius + strokeWidth / 2),
+      _startAngle,
+      _sweepAngle,
+      false,
+      borderPaint,
+    );
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius - strokeWidth / 2),
+      _startAngle,
+      _sweepAngle,
+      false,
+      borderPaint,
     );
   }
 
@@ -173,7 +150,8 @@ class _RingTrackPainter extends CustomPainter {
 class _RingFillPainter extends CustomPainter {
   final double progress;
   final double strokeWidth;
-  final LinearGradient gradient;
+  final Color color;
+  final Color borderColor;
 
   static const _startAngle = -pi / 2 + 0.3;
   static const _maxSweep = 2 * pi - 0.6;
@@ -181,7 +159,8 @@ class _RingFillPainter extends CustomPainter {
   _RingFillPainter({
     required this.progress,
     required this.strokeWidth,
-    required this.gradient,
+    required this.color,
+    required this.borderColor,
   });
 
   @override
@@ -195,32 +174,37 @@ class _RingFillPainter extends CustomPainter {
     final sweepAngle = _maxSweep * progress;
 
     final paint = Paint()
-      ..shader = gradient.createShader(
-        Rect.fromCircle(center: center, radius: radius),
-      )
+      ..color = color
       ..strokeWidth = strokeWidth
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
+      ..style = PaintingStyle.stroke;
 
     canvas.drawArc(rect, _startAngle, sweepAngle, false, paint);
 
-    // Glow effect at the tip
-    if (progress > 0.05) {
-      final tipAngle = _startAngle + sweepAngle;
-      final tipX = center.dx + radius * cos(tipAngle);
-      final tipY = center.dy + radius * sin(tipAngle);
+    // Borders for the fill arc
+    final borderPaint = Paint()
+      ..color = borderColor
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
 
-      final glowPaint = Paint()
-        ..color = gradient.colors.last.withOpacity(0.4)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-
-      canvas.drawCircle(Offset(tipX, tipY), strokeWidth / 2 + 2, glowPaint);
-    }
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius + strokeWidth / 2),
+      _startAngle,
+      sweepAngle,
+      false,
+      borderPaint,
+    );
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius - strokeWidth / 2),
+      _startAngle,
+      sweepAngle,
+      false,
+      borderPaint,
+    );
   }
 
   @override
   bool shouldRepaint(covariant _RingFillPainter old) =>
-      old.progress != progress;
+      old.progress != progress || old.color != color;
 }
 
 const _startAngle = -pi / 2 + 0.3;
@@ -259,21 +243,22 @@ class MoodScoreBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = MoodTokens.colorFor(moodScore);
+    final theme = Theme.of(context);
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        gradient: MoodTokens.gradientFor(moodScore),
+        color: color,
         shape: BoxShape.circle,
-        boxShadow: AppShadow.coloredSm(color),
+        border: Border.all(color: theme.colorScheme.onSurface, width: 2),
       ),
       child: Center(
         child: Text(
           moodScore.toString(),
           style: TextStyle(
-            fontSize: size * 0.38,
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
+            fontSize: size * 0.45,
+            fontWeight: FontWeight.w900,
+            color: theme.colorScheme.onSurface,
           ),
         ),
       ),

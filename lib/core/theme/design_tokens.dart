@@ -44,64 +44,14 @@ abstract class AppRadius {
 abstract class AppShadow {
   static List<BoxShadow> none = [];
 
-  // Neutral gray shadows — no color tint
-  static const List<BoxShadow> xs = [
-    BoxShadow(
-      color: AppColors.shadowSm,
-      blurRadius: 4,
-      offset: Offset(0, 1),
-    ),
-  ];
+  // Flat look for Gruvbox — significantly reduced shadows
+  static const List<BoxShadow> xs = [];
+  static const List<BoxShadow> sm = [];
+  static const List<BoxShadow> md = [];
+  static const List<BoxShadow> lg = [];
 
-  static const List<BoxShadow> sm = [
-    BoxShadow(
-      color: AppColors.shadowSm,
-      blurRadius: 12,
-      offset: Offset(0, 4),
-    ),
-  ];
-
-  static const List<BoxShadow> md = [
-    BoxShadow(
-      color: AppColors.shadowMd,
-      blurRadius: 20,
-      offset: Offset(0, 8),
-    ),
-    BoxShadow(
-      color: AppColors.shadowSm,
-      blurRadius: 6,
-      offset: Offset(0, 2),
-    ),
-  ];
-
-  static const List<BoxShadow> lg = [
-    BoxShadow(
-      color: AppColors.shadowLg,
-      blurRadius: 32,
-      offset: Offset(0, 12),
-    ),
-    BoxShadow(
-      color: AppColors.shadowMd,
-      blurRadius: 12,
-      offset: Offset(0, 4),
-    ),
-  ];
-
-  static List<BoxShadow> coloredSm(Color color) => [
-        BoxShadow(
-          color: color.withValues(alpha: 0.22),
-          blurRadius: 12,
-          offset: const Offset(0, 4),
-        ),
-      ];
-
-  static List<BoxShadow> coloredMd(Color color) => [
-        BoxShadow(
-          color: color.withValues(alpha: 0.28),
-          blurRadius: 20,
-          offset: const Offset(0, 8),
-        ),
-      ];
+  static List<BoxShadow> coloredSm(Color color) => [];
+  static List<BoxShadow> coloredMd(Color color) => [];
 }
 
 // ─── Wellness Score Tokens ────────────────────────────────
@@ -123,42 +73,20 @@ abstract class WellnessTokens {
   }
 
   static Color colorFor(WellnessBand band) => switch (band) {
-        WellnessBand.thriving => const Color(0xFF06D6A0),
-        WellnessBand.growing => const Color(0xFF4ECDC4),
-        WellnessBand.steady => const Color(0xFFFFD166),
-        WellnessBand.struggling => const Color(0xFFFF8C42),
-        WellnessBand.critical => const Color(0xFFFF4757),
+        WellnessBand.thriving => AppColors.gruvboxLightGreen,
+        WellnessBand.growing => AppColors.gruvboxLightAqua,
+        WellnessBand.steady => AppColors.gruvboxLightYellow,
+        WellnessBand.struggling => AppColors.gruvboxLightOrange,
+        WellnessBand.critical => AppColors.gruvboxLightRed,
       };
 
   static Color colorForScore(double score) => colorFor(bandFor(score));
 
-  static LinearGradient gradientFor(WellnessBand band) => switch (band) {
-        WellnessBand.thriving => const LinearGradient(
-            colors: [Color(0xFF06D6A0), Color(0xFF4ECDC4)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        WellnessBand.growing => const LinearGradient(
-            colors: [Color(0xFF00BEB4), Color(0xFF0EA5E9)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        WellnessBand.steady => const LinearGradient(
-            colors: [Color(0xFFFFD166), Color(0xFFA8E063)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        WellnessBand.struggling => const LinearGradient(
-            colors: [Color(0xFFFF8C42), Color(0xFFFFD166)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        WellnessBand.critical => const LinearGradient(
-            colors: [Color(0xFFFF4757), Color(0xFFFF8C42)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-      };
+  // Gradients removed - returning solid color "gradient" (start/end same)
+  static LinearGradient gradientFor(WellnessBand band) {
+    final color = colorFor(band);
+    return LinearGradient(colors: [color, color]);
+  }
 
   static String labelFor(WellnessBand band) => switch (band) {
         WellnessBand.thriving => 'Thriving',
@@ -199,7 +127,7 @@ abstract class MoodTokens {
   static LinearGradient gradientFor(int score) {
     final color = colorFor(score);
     return LinearGradient(
-      colors: [color, color.withOpacity(0.7)],
+      colors: [color, color],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     );
@@ -237,22 +165,22 @@ abstract class MoodTokens {
 // ─── Animation Durations ─────────────────────────────────
 abstract class AppDuration {
   static const Duration instant = Duration(milliseconds: 0);
-  static const Duration fast = Duration(milliseconds: 150);
-  static const Duration normal = Duration(milliseconds: 300);
-  static const Duration slow = Duration(milliseconds: 500);
-  static const Duration slower = Duration(milliseconds: 800);
-  static const Duration page = Duration(milliseconds: 350);
+  static const Duration fast = Duration(milliseconds: 0);
+  static const Duration normal = Duration(milliseconds: 0);
+  static const Duration slow = Duration(milliseconds: 0);
+  static const Duration slower = Duration(milliseconds: 0);
+  static const Duration page = Duration(milliseconds: 0);
 }
 
 // ─── Animation Curves ────────────────────────────────────
 abstract class AppCurve {
-  static const Curve standard = Curves.easeInOut;
-  static const Curve enter = Curves.easeOutCubic;
-  static const Curve exit = Curves.easeInCubic;
-  static const Curve spring = Curves.elasticOut;
-  static const Curve bounce = Curves.bounceOut;
-  static const Curve decelerate = Curves.decelerate;
-  static const Curve emphasized = Curves.easeInOutCubicEmphasized;
+  // static const Curve standard = ThresholdCurve(0.5);
+  // static const Curve enter = ThresholdCurve(0.5);
+  // static const Curve exit = ThresholdCurve(0.5);
+  // static const Curve spring = ThresholdCurve(0.5);
+  // static const Curve bounce = ThresholdCurve(0.5);
+  // static const Curve decelerate = ThresholdCurve(0.5);
+  // static const Curve emphasized = ThresholdCurve(0.5);
 }
 
 // ─── Theme-adaptive Token Resolver ───────────────────────
