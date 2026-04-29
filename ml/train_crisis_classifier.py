@@ -1,0 +1,491 @@
+#!/usr/bin/env python3
+"""
+MindBridge Crisis Classifier — Training Script
+===============================================
+Run this in Google Colab:
+  1. Go to colab.research.google.com → New Notebook
+  2. Paste this ENTIRE script into a single code cell
+  3. Runtime → Run All  (takes ~10-15 minutes)
+
+  OR upload this file (Files panel → Upload to session storage)
+  then in a new cell run:  !python train_crisis_classifier.py
+
+Output files (place these in  assets/models/  inside the Flutter project):
+  /content/crisis_classifier.tflite   (~5-10 MB)
+  /content/crisis_vocab.json          (~150 KB)
+  /content/crisis_thresholds.json     (tiny config)
+"""
+
+# ════════════════════════════════════════════════════════════
+# STEP 1 — Install dependencies
+# ════════════════════════════════════════════════════════════
+import subprocess, sys
+subprocess.run(
+    [sys.executable, '-m', 'pip', 'install', '-q',
+     'tensorflow>=2.15', 'datasets', 'scikit-learn'],
+    check=False
+)
+
+# ════════════════════════════════════════════════════════════
+# STEP 2 — Imports & configuration
+# ════════════════════════════════════════════════════════════
+import os, json, re, random
+import numpy as np
+import tensorflow as tf
+from tensorflow import keras
+from collections import Counter
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix
+
+random.seed(42)
+np.random.seed(42)
+tf.random.set_seed(42)
+
+print(f"TensorFlow {tf.__version__}")
+
+VOCAB_SIZE  = 10_000   # 0=PAD, 1=OOV, 2..N=words
+MAX_LEN     = 128      # tokens per input
+EMBED_DIM   = 128
+BATCH_SIZE  = 32
+EPOCHS      = 30
+OUTPUT_DIR  = '/content'
+
+SAFE, DISTRESS, CRISIS = 0, 1, 2
+LABEL_NAMES = ['safe', 'distress', 'crisis']
+
+# ════════════════════════════════════════════════════════════
+# STEP 3 — Synthetic dataset (Kenyan university context)
+# ════════════════════════════════════════════════════════════
+
+SAFE_TEXTS = [
+    "just finished my assignment, feeling relieved",
+    "going to the library to study for my CATs",
+    "had lunch with my friends at the canteen today",
+    "HELB finally came through this semester, so relieved",
+    "excited about our group project presentation tomorrow",
+    "slept really well last night, feeling fresh and ready",
+    "the lecture today was really interesting",
+    "planning to join the debate club this semester",
+    "called home today, my parents are doing well",
+    "submitted my attachment report right on time",
+    "got a great grade on my last continuous assessment",
+    "going for a walk around campus to clear my head",
+    "finally understood the sorting algorithm after many tries",
+    "made a new friend in my data structures class",
+    "the weather is beautiful, eating lunch outside today",
+    "finally got my student ID card sorted",
+    "looking forward to the semester break next month",
+    "our hostel team won the interhall football match",
+    "cooking ugali and sukuma wiki with my roommate tonight",
+    "found a quiet study spot in the main library",
+    "my supervisor approved my research proposal today",
+    "feeling motivated after a morning workout at the gym",
+    "got my transcripts from the registrar finally",
+    "attended a career fair and networked with great companies",
+    "managed to register for all my units before the deadline",
+    "had a really productive group study session today",
+    "enrolled in an online Python certification course",
+    "the internship application process is going well",
+    "reconnected with old high school friends on campus",
+    "feeling very confident about my presentation tomorrow",
+    "my roommate and I sorted out our misunderstanding",
+    "the new cafeteria food is actually pretty decent",
+    "getting the hang of this machine learning module",
+    "finished reading the required chapters early",
+    "my part-time tutoring job is helping with living expenses",
+    "attended a mental health awareness talk today",
+    "feeling grateful for my close group of friends here",
+    "nearly at the end of semester, almost there",
+    "joined a study accountability group this week",
+    "CAT results were better than i expected",
+    "having a relaxed Sunday before the busy week starts",
+    "found a scholarship opportunity i'm going to apply for",
+    "the dean's list announcement really motivated me",
+    "just had a satisfying meal and feel good",
+    "my laptop is working again so i can study properly",
+    "sorted out my fee balance issue with the finance office",
+    "the campus swimming pool is a great stress reliever",
+    "feeling optimistic about the semester ahead",
+    "had a really encouraging talk with my class lecturer",
+    "my study plan is actually working, i'm keeping up",
+    "i aced my programming quiz, so happy right now",
+    "found a part time job on campus, great opportunity",
+    "the student counselling service was actually helpful",
+    "feeling more settled now than i was at the start",
+    "my group and i just submitted a really solid project",
+    "made dean of students list, parents are so proud",
+    "catching up with friends this weekend, much needed",
+    "my mental health is in a good place this semester",
+    "starting to really enjoy my course honestly",
+    "got enough money to cover fees and food this month",
+    "feeling hopeful about things",
+]
+
+DISTRESS_TEXTS = [
+    "so overwhelmed with all these assignments and upcoming CATs",
+    "i can't sleep, my mind races about exams all night",
+    "feeling really anxious about failing this unit",
+    "i feel so lonely here, nobody really understands me",
+    "i'm so stressed i don't even know where to start",
+    "HELB hasn't come and my rent is already overdue",
+    "i've been crying alone in my room all day",
+    "the academic pressure here is completely unbearable",
+    "i don't think i'm smart enough to be here",
+    "my mental health is really deteriorating lately",
+    "i feel completely lost and don't know what to do",
+    "i haven't eaten properly in two days because of the stress",
+    "i'm falling behind in all my units and panicking",
+    "i feel like a failure compared to my classmates",
+    "anxiety attacks are getting more and more frequent",
+    "i'm exhausted all the time and can't focus",
+    "i had a breakdown in the bathroom at school today",
+    "everything feels so pointless lately",
+    "i'm really struggling to get out of bed in the morning",
+    "nobody would probably notice if i stayed in my room all week",
+    "i'm drowning in financial debt and don't see a way forward",
+    "my parents sacrificed everything and i feel like i'm wasting it",
+    "i've been isolating myself from all my friends lately",
+    "i barely recognize who i am anymore",
+    "the pressure from home to perform is suffocating me",
+    "i feel totally stuck and don't know how to move on",
+    "i'm scared to tell anyone how bad things have gotten",
+    "my grades are dropping and i'm terrified of dismissal",
+    "i've been drinking to cope with all this stress",
+    "i feel so invisible on this campus",
+    "i haven't spoken to anyone properly in three days",
+    "i keep thinking i made a terrible mistake coming to university",
+    "the loneliness here is slowly eating me up",
+    "i'm not sleeping properly or eating well, i'm a mess",
+    "i feel like i'm going through all of this completely alone",
+    "financial stress is seriously affecting my studies",
+    "i wake up every morning dreading the entire day",
+    "anxiety is so bad i can't even attend my lectures",
+    "i don't feel motivated for absolutely anything right now",
+    "i've been having panic attacks more often now",
+    "i feel like everyone has figured life out except me",
+    "i'm so far behind i don't know how to catch up",
+    "i've been having dark thoughts but trying to fight them",
+    "everything just weighs too much right now",
+    "i feel so disconnected from everyone and everything",
+    "i'm constantly on the verge of tears but i hide it",
+    "i failed my CAT and feel completely devastated",
+    "i can't really see a positive future for myself right now",
+    "i'm barely holding it together honestly",
+    "i feel like i'm slowly disappearing and no one notices",
+    "i don't know how much longer i can keep pretending to be okay",
+    "missing home so much and feeling really depressed",
+    "i feel like my mental health is getting worse not better",
+    "i don't have any energy for anything these days",
+    "the stress is making me physically unwell now",
+    "i keep calling my mum crying but she doesn't understand",
+    "i have nobody here i can really open up to",
+    "the future feels so uncertain and it scares me",
+    "i feel like a burden to my family with all these fees",
+    "i'm so tired all the time and i don't know why",
+    "i don't enjoy anything anymore, even things i used to love",
+]
+
+CRISIS_TEXTS = [
+    "i want to kill myself",
+    "i don't want to live anymore",
+    "i've been seriously thinking about ending my life",
+    "nobody would miss me if i was gone",
+    "i want to disappear from this world permanently",
+    "i've been cutting myself to cope with all this pain",
+    "i'm going to hurt myself tonight",
+    "what is the point of living, everything is truly hopeless",
+    "i have a plan to end it all and i'm ready",
+    "i'd rather be dead than continue living like this",
+    "i've been collecting pills just in case i decide to do it",
+    "i'm not going to be around much longer",
+    "i've already written goodbye letters to my family",
+    "the only real way out of this pain is death",
+    "i can't take it anymore, i am completely done with everything",
+    "nobody cares if i live or die anyway",
+    "i've already made my decision about what i'm going to do",
+    "i'm saying goodbye to everyone i love",
+    "my family would benefit more from my life insurance than from me",
+    "i tried to hurt myself last night",
+    "i don't see any reason to keep going anymore",
+    "please don't try to look for me after tonight",
+    "i am a burden to everyone and they'd all be better without me",
+    "i've been having suicidal thoughts every single day",
+    "this world would genuinely be better without me in it",
+    "this is my last message to anyone",
+    "i want to end all this pain once and for all",
+    "self harm is the only thing that makes me feel anything",
+    "i've been looking up ways to end my life",
+    "i am going to end it when everyone is asleep tonight",
+    "i have nothing left to live for",
+    "i wish i had never been born",
+    "i want to die more than i want anything else right now",
+    "i keep thinking about not existing anymore",
+    "life feels completely unbearable and i see absolutely no hope",
+    "i am ready to end everything tonight",
+    "i have been planning exactly how to do it for days",
+    "please take care of my belongings after i'm gone",
+    "i see no point in waking up tomorrow",
+    "i deserve to die for all the pain i have caused people",
+    "death feels like the only real relief i can imagine",
+    "i have decided today is going to be my last day",
+    "i already said goodbye to my best friend without them knowing why",
+    "i can no longer imagine any future where i exist",
+    "i just want everything to permanently stop",
+    "thinking about dying gives me more comfort than anything else",
+    "i have made my decision and i am at peace with it now",
+    "i want to jump from somewhere and end everything",
+    "i took some pills tonight and i don't feel well",
+    "i harmed myself badly and i don't want help",
+    "no one can help me now, it is too late",
+    "i am standing at the edge and i am not scared",
+    "i have been thinking about this for weeks and i am ready",
+    "i wrote my note and i am ready now",
+    "i texted everyone goodbye already",
+    "i called my mum to say goodbye but she didn't understand",
+    "i am going to do it tonight, my mind is made up",
+    "everyone will be better off when i am gone",
+    "i am not going to be here by the time anyone reads this",
+    "i have already hurt myself today and i don't care",
+    "i want to end the pain permanently tonight",
+]
+
+print(f"Synthetic data: {len(SAFE_TEXTS)} safe | "
+      f"{len(DISTRESS_TEXTS)} distress | {len(CRISIS_TEXTS)} crisis")
+
+# ════════════════════════════════════════════════════════════
+# STEP 4 — Augment with HuggingFace data (optional)
+# ════════════════════════════════════════════════════════════
+
+extra_texts, extra_labels = [], []
+
+DISTRESS_KEYWORDS = {
+    'overwhelmed', 'anxious', 'depressed', 'lonely', 'hopeless',
+    'worthless', 'exhausted', 'stressed', 'crying', 'panic',
+    'worried', 'scared', 'struggling', 'failing', 'lost',
+    'breakdown', 'numb', 'empty', 'helpless', 'trapped',
+}
+
+try:
+    from datasets import load_dataset
+    print("\nLoading HuggingFace dataset (vibhorag101/phr_suicidal_detection_dataset)...")
+    ds = load_dataset('vibhorag101/phr_suicidal_detection_dataset',
+                      split='train[:8000]', trust_remote_code=True)
+
+    for row in ds:
+        text = str(row.get('text', row.get('Text', ''))).strip()
+        if not text or len(text.split()) < 5 or len(text) > 1000:
+            continue
+        raw_label = row.get('is_suicidal', row.get('label', -1))
+        if raw_label == 1:
+            extra_texts.append(text)
+            extra_labels.append(CRISIS)
+        elif raw_label == 0:
+            lower = text.lower()
+            is_distress = any(kw in lower for kw in DISTRESS_KEYWORDS)
+            extra_texts.append(text)
+            extra_labels.append(DISTRESS if is_distress else SAFE)
+
+    c = Counter(extra_labels)
+    print(f"HuggingFace loaded: safe={c[0]} distress={c[1]} crisis={c[2]}")
+except Exception as e:
+    print(f"HuggingFace unavailable ({e}). Synthetic-only training — still valid.")
+
+# ════════════════════════════════════════════════════════════
+# STEP 5 — Combine & balance
+# ════════════════════════════════════════════════════════════
+
+# Synthetic examples oversampled 4x for Kenyan campus relevance
+base_texts  = (SAFE_TEXTS + DISTRESS_TEXTS + CRISIS_TEXTS) * 4
+base_labels = ([SAFE]    * len(SAFE_TEXTS) +
+               [DISTRESS] * len(DISTRESS_TEXTS) +
+               [CRISIS]   * len(CRISIS_TEXTS)) * 4
+
+# Add HuggingFace data capped to 6000 per class
+MAX_PER_CLASS = 6_000
+class_counts = {0: 0, 1: 0, 2: 0}
+for t, l in zip(extra_texts, extra_labels):
+    if class_counts[l] < MAX_PER_CLASS:
+        base_texts.append(t)
+        base_labels.append(l)
+        class_counts[l] += 1
+
+combined = list(zip(base_texts, base_labels))
+random.shuffle(combined)
+all_texts, all_labels = zip(*combined)
+
+total = len(all_texts)
+c = Counter(all_labels)
+print(f"\nFinal dataset: {total} examples — "
+      f"safe={c[0]} distress={c[1]} crisis={c[2]}")
+
+# ════════════════════════════════════════════════════════════
+# STEP 6 — Preprocessing & vocabulary
+# ════════════════════════════════════════════════════════════
+
+def clean(text: str) -> str:
+    text = text.lower().strip()
+    text = re.sub(r'https?://\S+', ' ', text)
+    text = re.sub(r"[^a-z0-9\s'']", ' ', text)
+    return re.sub(r'\s+', ' ', text).strip()
+
+def tokenize(text: str) -> list:
+    return clean(text).split()
+
+print("Building vocabulary...")
+word_counts = Counter()
+for t in all_texts:
+    word_counts.update(tokenize(t))
+
+# 0=PAD, 1=OOV, 2+ = real words
+vocab = {w: i + 2 for i, (w, _)
+         in enumerate(word_counts.most_common(VOCAB_SIZE - 2))}
+vocab['<PAD>'] = 0
+vocab['<OOV>'] = 1
+print(f"Vocabulary: {len(vocab)} tokens "
+      f"(covering {len(word_counts)} unique words total)")
+
+def encode(text: str) -> list:
+    ids = [vocab.get(w, 1) for w in tokenize(text)][:MAX_LEN]
+    return ids + [0] * (MAX_LEN - len(ids))
+
+print("Encoding all examples...")
+X = np.array([encode(t) for t in all_texts], dtype=np.int32)
+y = np.array(all_labels, dtype=np.int32)
+
+X_train, X_val, y_train, y_val = train_test_split(
+    X, y, test_size=0.20, random_state=42, stratify=y)
+print(f"Train: {len(X_train)} | Val: {len(X_val)}")
+
+# ════════════════════════════════════════════════════════════
+# STEP 7 — Model architecture (dual-branch CNN)
+# ════════════════════════════════════════════════════════════
+
+def build_model():
+    inp = keras.Input(shape=(MAX_LEN,), dtype='int32', name='input_ids')
+    emb = keras.layers.Embedding(VOCAB_SIZE, EMBED_DIM, name='embedding')(inp)
+
+    # Tri-gram branch
+    x1 = keras.layers.Conv1D(256, 3, activation='relu', padding='same')(emb)
+    x1 = keras.layers.GlobalMaxPooling1D()(x1)
+
+    # 5-gram branch
+    x2 = keras.layers.Conv1D(256, 5, activation='relu', padding='same')(emb)
+    x2 = keras.layers.GlobalMaxPooling1D()(x2)
+
+    x = keras.layers.Concatenate()([x1, x2])
+    x = keras.layers.Dense(
+        128, activation='relu',
+        kernel_regularizer=keras.regularizers.l2(1e-4))(x)
+    x = keras.layers.Dropout(0.4)(x)
+    out = keras.layers.Dense(3, activation='softmax', name='output')(x)
+
+    m = keras.Model(inp, out)
+    m.compile(
+        optimizer=keras.optimizers.Adam(1e-3),
+        loss='sparse_categorical_crossentropy',
+        metrics=['accuracy'],
+    )
+    return m
+
+model = build_model()
+model.summary()
+
+# ════════════════════════════════════════════════════════════
+# STEP 8 — Training
+# ════════════════════════════════════════════════════════════
+
+callbacks = [
+    keras.callbacks.EarlyStopping(
+        monitor='val_accuracy', patience=5,
+        restore_best_weights=True, verbose=1),
+    keras.callbacks.ReduceLROnPlateau(
+        monitor='val_loss', factor=0.5, patience=3,
+        min_lr=1e-5, verbose=1),
+]
+
+history = model.fit(
+    X_train, y_train,
+    validation_data=(X_val, y_val),
+    batch_size=BATCH_SIZE,
+    epochs=EPOCHS,
+    callbacks=callbacks,
+    verbose=1,
+)
+
+# ════════════════════════════════════════════════════════════
+# STEP 9 — Evaluation
+# ════════════════════════════════════════════════════════════
+
+y_pred = np.argmax(model.predict(X_val, verbose=0), axis=1)
+
+print("\n─── Validation Results ────────────────────────────")
+print(classification_report(y_val, y_pred, target_names=LABEL_NAMES))
+print("Confusion matrix  [rows=actual, cols=predicted]")
+print("                  safe  distress  crisis")
+cm = confusion_matrix(y_val, y_pred)
+for i, row in enumerate(cm):
+    print(f"  {LABEL_NAMES[i]:>10}  {row}")
+
+val_acc = np.mean(y_pred == y_val)
+print(f"\nOverall val accuracy: {val_acc:.4f}")
+if val_acc < 0.70:
+    print("⚠  Accuracy < 70% — the keyword fallback stays active so the app "
+          "is still safe, but adding more labelled data will improve this.")
+else:
+    print("✓  Model accuracy is good — proceed to export.")
+
+# ════════════════════════════════════════════════════════════
+# STEP 10 — TFLite conversion (dynamic-range quantisation)
+# ════════════════════════════════════════════════════════════
+
+print("\nConverting to TFLite...")
+converter = tf.lite.TFLiteConverter.from_keras_model(model)
+converter.optimizations = [tf.lite.Optimize.DEFAULT]   # ~4x size reduction
+tflite_bytes = converter.convert()
+
+tflite_path = os.path.join(OUTPUT_DIR, 'crisis_classifier.tflite')
+with open(tflite_path, 'wb') as f:
+    f.write(tflite_bytes)
+size_mb = len(tflite_bytes) / (1024 * 1024)
+print(f"Saved: {tflite_path}  ({size_mb:.1f} MB)")
+
+# ════════════════════════════════════════════════════════════
+# STEP 11 — Export vocab & thresholds
+# ════════════════════════════════════════════════════════════
+
+vocab_export = {w: int(i) for w, i in vocab.items()
+                if w not in ('<PAD>', '<OOV>')}
+vocab_path = os.path.join(OUTPUT_DIR, 'crisis_vocab.json')
+with open(vocab_path, 'w') as f:
+    json.dump(vocab_export, f, separators=(',', ':'))
+print(f"Saved: {vocab_path}  ({os.path.getsize(vocab_path) // 1024} KB)")
+
+# Thresholds are calibrated empirically.
+# They can be edited in crisis_thresholds.json without retraining.
+thresholds = {
+    "distress_min": 0.42,   # P(distress) >= this  →  tier 1
+    "crisis_min":   0.72,   # P(crisis)   >= this  →  tier 2
+    "tier3_min":    0.91,   # P(crisis)   >= this  →  tier 3 (lock screen)
+}
+thresh_path = os.path.join(OUTPUT_DIR, 'crisis_thresholds.json')
+with open(thresh_path, 'w') as f:
+    json.dump(thresholds, f, indent=2)
+print(f"Saved: {thresh_path}")
+
+# ════════════════════════════════════════════════════════════
+# STEP 12 — Download from Colab
+# ════════════════════════════════════════════════════════════
+
+print("\n─── Downloading output files ──────────────────────")
+try:
+    from google.colab import files
+    files.download(tflite_path)
+    files.download(vocab_path)
+    files.download(thresh_path)
+    print("✓ Download triggered. Save the 3 files to:  assets/models/")
+except ImportError:
+    print("Not running in Colab. Files are at:")
+    print(f"  {tflite_path}")
+    print(f"  {vocab_path}")
+    print(f"  {thresh_path}")
+    print("Copy them to  assets/models/  in the Flutter project.")
