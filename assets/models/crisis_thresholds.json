@@ -1,0 +1,5 @@
+{
+  "distress_min": 0.42,
+  "crisis_min": 0.72,
+  "tier3_min": 0.91
+}
