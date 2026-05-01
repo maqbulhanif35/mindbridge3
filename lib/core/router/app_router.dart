@@ -97,8 +97,6 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final authState = listenable.state;
       final status = authState.status;
-      final isLoading =
-          status == AuthStatus.loading || status == AuthStatus.initial;
       final isAuthenticated = authState.isAuthenticated;
       final isPendingVerification = authState.isPendingVerification;
       final location = state.matchedLocation;
@@ -111,8 +109,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isOnVerify = location == AppRoutes.verifyEmail;
       final isOnForgot = location == AppRoutes.forgotPassword;
       final isOnOnboarding = location == AppRoutes.onboarding;
-      final isOnAuthPage = location == AppRoutes.login ||
-          location == AppRoutes.register;
+      final isOnAuthPage =
+          location == AppRoutes.login || location == AppRoutes.register;
       final isOnAdminPage = location.startsWith('/admin');
 
       // Let splash handle initial routing
@@ -141,8 +139,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       // Not authenticated — allow forgot-password and auth pages through
-      if (!isAuthenticated && !isPendingVerification && !isInResetFlow &&
-          !isOnAuthPage && !isOnForgot) {
+      if (!isAuthenticated &&
+          !isPendingVerification &&
+          !isInResetFlow &&
+          !isOnAuthPage &&
+          !isOnForgot) {
         return AppRoutes.login;
       }
 

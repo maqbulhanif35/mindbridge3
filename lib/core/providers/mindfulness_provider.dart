@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import '../models/streak_model.dart';
 import '../services/supabase_service.dart';
@@ -91,19 +92,26 @@ class MindfulnessState {
 class MindfulnessNotifier extends Notifier<MindfulnessState> {
   static final _client = Supabase.instance.client;
 
+  final AudioPlayer _audioPlayer = AudioPlayer();
+
   @override
   MindfulnessState build() {
-    // Load immediately; also reload when user signs in
     _loadToday();
+
     ref.listen<AuthState>(authProvider, (prev, next) {
       if (next.isAuthenticated && !(prev?.isAuthenticated ?? false)) {
         _loadToday();
       }
     });
+
+    ref.onDispose(() {
+      _audioPlayer.dispose();
+    });
+
     return const MindfulnessState();
   }
 
-  // ── Load today's sessions from Supabase ──────────────────
+  // ── Load today's sessions ────────────────────────────────
 
   Future<void> _loadToday() async {
     final userId = SupabaseService.currentUser?.id;
@@ -127,7 +135,6 @@ class MindfulnessNotifier extends Notifier<MindfulnessState> {
 
       state = state.copyWith(todaySessions: sessions, isLoaded: true);
     } catch (_) {
-      // Table may not exist yet — just mark loaded so UI doesn't block
       state = state.copyWith(isLoaded: true);
     }
   }
@@ -155,12 +162,10 @@ class MindfulnessNotifier extends Notifier<MindfulnessState> {
       completedAt: now,
     );
 
-    // Update in-memory immediately so UI reflects instantly
     state = state.copyWith(
       todaySessions: [...state.todaySessions, session],
     );
 
-    // Persist to Supabase (best-effort — UI already updated)
     if (userId != null) {
       try {
         await _client
@@ -169,19 +174,35 @@ class MindfulnessNotifier extends Notifier<MindfulnessState> {
       } catch (_) {}
     }
 
-    // Record mindfulness streak
     ref.read(streakProvider.notifier).recordActivity(StreakType.mindfulness);
   }
 
-  void setActiveSound(String label) {
+  // ── Audio controls (audioplayers) ─────────────────────────
+
+  Future<void> setActiveSound(String label) async {
     if (state.activeSound == label && state.soundPlaying) {
+      await _audioPlayer.stop();
       state = state.copyWith(clearSound: true, soundPlaying: false);
-    } else {
+      return;
+    }
+
+    await _audioPlayer.stop();
+
+    try {
+      final path =
+          'audio/${label.toLowerCase().replaceAll(' ', '_')}.mp3';
+
+      await _audioPlayer.setReleaseMode(ReleaseMode.loop);
+      await _audioPlayer.play(AssetSource(path));
+
       state = state.copyWith(activeSound: label, soundPlaying: true);
+    } catch (_) {
+      state = state.copyWith(clearSound: true, soundPlaying: false);
     }
   }
 
-  void stopSound() {
+  Future<void> stopSound() async {
+    await _audioPlayer.stop();
     state = state.copyWith(clearSound: true, soundPlaying: false);
   }
 

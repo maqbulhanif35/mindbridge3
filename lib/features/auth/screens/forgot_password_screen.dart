@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -8,16 +7,9 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/router/app_router.dart';
 
-// ─────────────────────────────────────────────────────────
-// ForgotPasswordScreen — 3-step OTP password reset flow
-//
-//  Step 1 — Enter email address → OTP is sent
-//  Step 2 — Enter 6-digit OTP from email
-//  Step 3 — Enter + confirm new password
-// ─────────────────────────────────────────────────────────
-
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
+
   @override
   ConsumerState<ForgotPasswordScreen> createState() =>
       _ForgotPasswordScreenState();
@@ -25,33 +17,27 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
 
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     with TickerProviderStateMixin {
-  int _step = 1;
-
-  // ── Step 1 ──
   final _emailCtrl = TextEditingController();
-  final _step1Key = GlobalKey<FormState>();
+  final _formKey = GlobalKey<FormState>();
 
-  // ── Step 2 — OTP ──
-  static const _otpLen = 6;
   final List<TextEditingController> _otpCtrls =
-      List.generate(_otpLen, (_) => TextEditingController());
-  final List<FocusNode> _otpFoci = List.generate(_otpLen, (_) => FocusNode());
-  Timer? _resendTimer;
-  int _resendSeconds = 0;
+      List.generate(6, (_) => TextEditingController());
+  final List<FocusNode> _otpFoci = List.generate(6, (_) => FocusNode());
   bool _otpError = false;
-  late final AnimationController _shakeCtrl;
-  late final Animation<double> _shakeAnim;
 
-  // ── Step 3 — New password ──
   final _passCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
-  final _step3Key = GlobalKey<FormState>();
+  final _passFormKey = GlobalKey<FormState>();
   bool _obscurePass = true;
   bool _obscureConfirm = true;
   double _passStrength = 0;
 
-  // ── Success ──
-  bool _resetSuccess = false;
+  bool _success = false;
+
+  int _resendSeconds = 0;
+
+  late final AnimationController _shakeCtrl;
+  late final Animation<double> _shakeAnim;
 
   @override
   void initState() {
@@ -69,18 +55,29 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
   @override
   void dispose() {
     _emailCtrl.dispose();
-    for (final c in _otpCtrls) c.dispose();
-    for (final f in _otpFoci) f.dispose();
-    _passCtrl
-      ..removeListener(_updateStrength)
-      ..dispose();
+    for (final c in _otpCtrls) {
+      c.dispose();
+    }
+    for (final f in _otpFoci) {
+      f.dispose();
+    }
+    _passCtrl.removeListener(_updateStrength);
+    _passCtrl.dispose();
     _confirmCtrl.dispose();
-    _resendTimer?.cancel();
     _shakeCtrl.dispose();
     super.dispose();
   }
 
-  // ── Password strength ────────────────────────────────────
+  int _deriveStep(AuthStatus status) {
+    switch (status) {
+      case AuthStatus.pendingReset:
+        return 2;
+      case AuthStatus.resetVerified:
+        return 3;
+      default:
+        return 1;
+    }
+  }
 
   void _updateStrength() {
     final p = _passCtrl.text;
@@ -106,47 +103,27 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     return 'Strong';
   }
 
-  // ── Back button logic ────────────────────────────────────
+  String get _otp => _otpCtrls.map((c) => c.text).join();
 
-  void _handleBack() {
-    if (_step > 1) {
-      setState(() {
-        _step--;
-        _otpError = false;
-      });
-    } else {
-      // Cancel the reset flow so router doesn't redirect back here
-      ref.read(authProvider.notifier).cancelReset();
-      context.go(AppRoutes.login);
-    }
+  void _clearOtp() {
+    for (final c in _otpCtrls) c.clear();
+    setState(() => _otpError = false);
+    Future.delayed(const Duration(milliseconds: 50), () {
+      if (mounted) _otpFoci[0].requestFocus();
+    });
   }
 
-  // ── Step 1: Send OTP ─────────────────────────────────────
-
   Future<void> _sendOtp() async {
-    if (!_step1Key.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) return;
     final ok = await ref
         .read(authProvider.notifier)
         .forgotPassword(_emailCtrl.text.trim());
     if (ok && mounted) {
-      setState(() => _step = 2);
       _startResendTimer();
       Future.delayed(const Duration(milliseconds: 100), () {
         if (mounted) _otpFoci[0].requestFocus();
       });
     }
-  }
-
-  void _startResendTimer() {
-    _resendTimer?.cancel();
-    setState(() => _resendSeconds = 60);
-    _resendTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) { t.cancel(); return; }
-      setState(() {
-        _resendSeconds--;
-        if (_resendSeconds <= 0) t.cancel();
-      });
-    });
   }
 
   Future<void> _resendOtp() async {
@@ -155,116 +132,113 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     final ok = await ref
         .read(authProvider.notifier)
         .forgotPassword(_emailCtrl.text.trim());
-    if (ok && mounted) _startResendTimer();
+    if (ok && mounted) {
+      _startResendTimer();
+    }
   }
 
-  // ── Step 2: Verify OTP ───────────────────────────────────
-
-  String get _otp => _otpCtrls.map((c) => c.text).join();
-
-  void _clearOtp() {
-    for (final c in _otpCtrls) c.clear();
-    setState(() { _otpError = false; });
-    Future.delayed(const Duration(milliseconds: 50), () {
-      if (mounted) _otpFoci[0].requestFocus();
+  void _startResendTimer() {
+    setState(() => _resendSeconds = 60);
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted || _resendSeconds <= 0) return false;
+      setState(() => _resendSeconds--);
+      return _resendSeconds > 0;
     });
   }
 
-  void _onOtpChanged(int index, String value) {
-    // Handle paste of full code
-    if (value.length == _otpLen) {
-      for (int i = 0; i < _otpLen; i++) {
-        _otpCtrls[i].text = value[i];
-      }
-      _otpFoci[_otpLen - 1].requestFocus();
-      setState(() => _otpError = false);
-      _autoVerify();
-      return;
-    }
-    if (value.length > 1) {
-      _otpCtrls[index].text = value[value.length - 1];
-      _otpCtrls[index].selection =
-          const TextSelection.collapsed(offset: 1);
-    }
-    if (value.isNotEmpty && index < _otpLen - 1) {
-      _otpFoci[index + 1].requestFocus();
-    } else if (value.isNotEmpty && index == _otpLen - 1) {
-      _otpFoci[index].unfocus();
-    }
-    if (value.isNotEmpty) setState(() => _otpError = false);
-    _autoVerify();
-  }
-
-  void _autoVerify() {
-    final code = _otp;
-    if (code.length == _otpLen &&
-        _otpCtrls.every((c) => c.text.isNotEmpty)) {
-      _verifyOtp();
-    }
-  }
-
   Future<void> _verifyOtp() async {
-    if (_otp.length < _otpLen) return;
     final code = _otp;
+    if (code.length != 6) return;
 
-    final ok =
-        await ref.read(authProvider.notifier).verifyResetOtp(code);
+    final ok = await ref.read(authProvider.notifier).verifyResetOtp(code);
     if (!mounted) return;
 
-    if (ok) {
-      setState(() {
-        _otpError = false;
-        _step = 3;
-      });
-    } else {
+    if (!ok) {
       setState(() => _otpError = true);
       _shakeCtrl.forward(from: 0);
       _clearOtp();
     }
   }
 
-  // ── Step 3: Reset Password ───────────────────────────────
+  void _autoVerify() {
+    final code = _otp;
+    if (code.length == 6 && _otpCtrls.every((c) => c.text.isNotEmpty)) {
+      _verifyOtp();
+    }
+  }
+
+  void _onOtpChanged(int index, String value) {
+    if (value.length == 6) {
+      for (int i = 0; i < 6; i++) {
+        _otpCtrls[i].text = i < value.length ? value[i] : '';
+      }
+      _otpFoci[5].requestFocus();
+      setState(() => _otpError = false);
+      _autoVerify();
+      return;
+    }
+    if (value.length > 1) {
+      _otpCtrls[index].text = value[value.length - 1];
+      _otpCtrls[index].selection = const TextSelection.collapsed(offset: 1);
+    }
+    if (value.isNotEmpty && index < 5) {
+      _otpFoci[index + 1].requestFocus();
+    } else if (value.isNotEmpty && index == 5) {
+      _otpFoci[index].unfocus();
+    }
+    if (value.isNotEmpty) setState(() => _otpError = false);
+    _autoVerify();
+  }
 
   Future<void> _resetPassword() async {
-    if (!_step3Key.currentState!.validate()) return;
-    final ok = await ref
-        .read(authProvider.notifier)
-        .resetPassword(_passCtrl.text);
-    if (!mounted) return;
-    if (ok) {
-      setState(() => _resetSuccess = true);
+    if (!_passFormKey.currentState!.validate()) return;
+    final ok =
+        await ref.read(authProvider.notifier).resetPassword(_passCtrl.text);
+    if (ok && mounted) {
+      setState(() => _success = true);
       await Future.delayed(const Duration(milliseconds: 2200));
       if (mounted) context.go(AppRoutes.login);
     }
   }
 
-  // ── Build ─────────────────────────────────────────────────
+  void _goBack(AuthStatus status, int step) {
+    if (step > 1) {
+      ref.read(authProvider.notifier).cancelReset();
+      _clearOtp();
+      _passCtrl.clear();
+      _confirmCtrl.clear();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
-    final isLoading = auth.isLoading;
+    final status = auth.status;
+    final isLoading = status == AuthStatus.loading;
     final error = auth.errorMessage;
+    final step = _deriveStep(status);
 
-    if (_resetSuccess) return const _SuccessScreen();
+    if (_success) return const _SuccessView();
 
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _handleBack();
+        if (!didPop) _goBack(status, step);
       },
       child: Scaffold(
         backgroundColor: const Color(0xFFF5F7FA),
         body: SafeArea(
           child: SingleChildScrollView(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Back button ──
                 GestureDetector(
-                  onTap: _handleBack,
+                  onTap: () {
+                    _goBack(status, step);
+                    context.go(AppRoutes.login);
+                  },
                   child: Container(
                     width: 42,
                     height: 42,
@@ -284,12 +258,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
                   ),
                 ),
                 const SizedBox(height: 28),
-
-                // ── Step indicator ──
-                _StepIndicator(current: _step),
+                _StepIndicator(current: step),
                 const SizedBox(height: 32),
-
-                // ── Step content (animated switch) ──
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 320),
                   transitionBuilder: (child, anim) => FadeTransition(
@@ -302,21 +272,21 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
                       child: child,
                     ),
                   ),
-                  child: _step == 1
-                      ? _Step1(
-                          key: const ValueKey(1),
-                          emailCtrl: _emailCtrl,
-                          formKey: _step1Key,
+                  child: step == 1
+                      ? _EmailForm(
+                          key: const ValueKey('email'),
+                          controller: _emailCtrl,
+                          formKey: _formKey,
                           isLoading: isLoading,
                           error: error,
                           onSend: _sendOtp,
                         )
-                      : _step == 2
-                          ? _Step2(
-                              key: const ValueKey(2),
-                              email: _emailCtrl.text.trim(),
-                              otpCtrls: _otpCtrls,
-                              otpFoci: _otpFoci,
+                      : step == 2
+                          ? _OtpForm(
+                              key: const ValueKey('otp'),
+                              email: auth.pendingEmail ?? '',
+                              controllers: _otpCtrls,
+                              focusNodes: _otpFoci,
                               isLoading: isLoading,
                               hasError: _otpError,
                               shakeAnim: _shakeAnim,
@@ -326,11 +296,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
                               onVerify: _verifyOtp,
                               onResend: _resendOtp,
                             )
-                          : _Step3(
-                              key: const ValueKey(3),
+                          : _PasswordForm(
+                              key: const ValueKey('password'),
                               passCtrl: _passCtrl,
                               confirmCtrl: _confirmCtrl,
-                              formKey: _step3Key,
+                              formKey: _passFormKey,
                               isLoading: isLoading,
                               error: error,
                               obscurePass: _obscurePass,
@@ -414,7 +384,7 @@ class _StepIndicator extends StatelessWidget {
   }
 }
 
-// ─── Shared widgets ───────────────────────────────────────
+// ─── Shared Widgets ───────────────────────────────────────
 
 class _Header extends StatelessWidget {
   final String title;
@@ -426,20 +396,24 @@ class _Header extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title,
-            style: const TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
-              height: 1.2,
-            )),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textPrimary,
+            height: 1.2,
+          ),
+        ),
         const SizedBox(height: 8),
-        Text(subtitle,
-            style: const TextStyle(
-              fontSize: 15,
-              color: AppColors.textMuted,
-              height: 1.5,
-            )),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            fontSize: 15,
+            color: AppColors.textMuted,
+            height: 1.5,
+          ),
+        ),
       ],
     );
   }
@@ -458,16 +432,19 @@ class _ErrorBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFFCA5A5)),
       ),
-      child: Row(children: [
-        const Icon(Icons.error_outline_rounded,
-            color: Color(0xFFEF4444), size: 16),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(message,
-              style: const TextStyle(
-                  fontSize: 13, color: Color(0xFFB91C1C))),
-        ),
-      ]),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded,
+              color: Color(0xFFEF4444), size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(fontSize: 13, color: Color(0xFFB91C1C)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -500,44 +477,28 @@ class _PrimaryBtn extends StatelessWidget {
                 child: CircularProgressIndicator(
                     strokeWidth: 2.5, color: Colors.white),
               )
-            : Text(label,
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w700)),
+            : Text(
+                label,
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
       ),
     );
   }
 }
 
-InputDecoration _fieldDecor(String label, IconData icon) => InputDecoration(
-      labelText: label,
-      prefixIcon:
-          Icon(icon, color: AppColors.primary, size: 20),
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-      enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: AppColors.primary, width: 1.5)),
-    );
+// ─── Step 1: Email ────────────────────────────────────────
 
-// ─── Step 1 — Email ───────────────────────────────────────
-
-class _Step1 extends StatelessWidget {
-  final TextEditingController emailCtrl;
+class _EmailForm extends StatelessWidget {
+  final TextEditingController controller;
   final GlobalKey<FormState> formKey;
   final bool isLoading;
   final String? error;
   final VoidCallback onSend;
 
-  const _Step1({
+  const _EmailForm({
     super.key,
-    required this.emailCtrl,
+    required this.controller,
     required this.formKey,
     required this.isLoading,
     required this.error,
@@ -558,13 +519,13 @@ class _Step1 extends StatelessWidget {
           ),
           const SizedBox(height: 36),
           TextFormField(
-            controller: emailCtrl,
+            controller: controller,
             keyboardType: TextInputType.emailAddress,
             autofillHints: const [AutofillHints.email],
             textInputAction: TextInputAction.done,
             onFieldSubmitted: (_) => onSend(),
-            decoration:
-                _fieldDecor('Email address', Icons.alternate_email_rounded),
+            decoration: _buildInputDecor(
+                'Email address', Icons.alternate_email_rounded),
             validator: (v) {
               if (v == null || v.trim().isEmpty) return 'Enter your email';
               if (!RegExp(r'^[\w.+-]+@[\w-]+\.\w+$').hasMatch(v.trim())) {
@@ -586,14 +547,35 @@ class _Step1 extends StatelessWidget {
       ),
     ).animate().fadeIn(duration: 280.ms);
   }
+
+  InputDecoration _buildInputDecor(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, color: AppColors.primary, size: 20),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+      ),
+    );
+  }
 }
 
-// ─── Step 2 — OTP ─────────────────────────────────────────
+// ─── Step 2: OTP ──────────────────────────────────────────
 
-class _Step2 extends StatelessWidget {
+class _OtpForm extends StatelessWidget {
   final String email;
-  final List<TextEditingController> otpCtrls;
-  final List<FocusNode> otpFoci;
+  final List<TextEditingController> controllers;
+  final List<FocusNode> focusNodes;
   final bool isLoading;
   final bool hasError;
   final Animation<double> shakeAnim;
@@ -603,11 +585,11 @@ class _Step2 extends StatelessWidget {
   final VoidCallback onVerify;
   final VoidCallback onResend;
 
-  const _Step2({
+  const _OtpForm({
     super.key,
     required this.email,
-    required this.otpCtrls,
-    required this.otpFoci,
+    required this.controllers,
+    required this.focusNodes,
     required this.isLoading,
     required this.hasError,
     required this.shakeAnim,
@@ -620,23 +602,20 @@ class _Step2 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maskedEmail = _maskEmail(email);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _Header(
           title: 'Check your email',
-          subtitle: 'A 6-digit code was sent to $maskedEmail. It expires in 15 minutes.',
+          subtitle:
+              'A 6-digit code was sent to ${_maskEmail(email)}. It expires in 15 minutes.',
         ),
         const SizedBox(height: 36),
-
-        // ── OTP boxes with shake ──
         AnimatedBuilder(
           animation: shakeAnim,
           builder: (context, child) {
-            final offset = shakeCtrl.isAnimating
-                ? ((shakeAnim.value * 2 - 1) * 10)
-                : 0.0;
+            final offset =
+                shakeCtrl.isAnimating ? ((shakeAnim.value * 2 - 1) * 10) : 0.0;
             return Transform.translate(
               offset: Offset(offset, 0),
               child: child,
@@ -644,46 +623,43 @@ class _Step2 extends StatelessWidget {
           },
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(6, (i) => _OtpBox(
-              controller: otpCtrls[i],
-              focusNode: otpFoci[i],
-              index: i,
-              hasError: hasError,
-              isFilled: otpCtrls[i].text.isNotEmpty,
-              onChanged: (v) => onOtpChanged(i, v),
-              onBackspace: () {
-                if (otpCtrls[i].text.isEmpty && i > 0) {
-                  otpCtrls[i - 1].clear();
-                  otpFoci[i - 1].requestFocus();
-                }
-              },
-            )),
+            children: List.generate(
+                6,
+                (i) => _OtpBox(
+                      controller: controllers[i],
+                      focusNode: focusNodes[i],
+                      index: i,
+                      hasError: hasError,
+                      isFilled: controllers[i].text.isNotEmpty,
+                      onChanged: (v) => onOtpChanged(i, v),
+                      onBackspace: () {
+                        if (controllers[i].text.isEmpty && i > 0) {
+                          controllers[i - 1].clear();
+                          focusNodes[i - 1].requestFocus();
+                        }
+                      },
+                    )),
           ),
         ),
-
         if (hasError) ...[
           const SizedBox(height: 14),
           const _ErrorBanner('Incorrect code. Please try again.'),
         ],
-
         const SizedBox(height: 28),
         _PrimaryBtn(
           label: isLoading ? 'Verifying…' : 'Verify code',
           isLoading: isLoading,
           onPressed: onVerify,
         ),
-
         const SizedBox(height: 24),
-
-        // ── Resend ──
         Center(
           child: GestureDetector(
             onTap: resendSeconds > 0 ? null : onResend,
             child: RichText(
               text: TextSpan(
                 text: "Didn't get it? ",
-                style: const TextStyle(
-                    fontSize: 14, color: AppColors.textMuted),
+                style:
+                    const TextStyle(fontSize: 14, color: AppColors.textMuted),
                 children: [
                   TextSpan(
                     text: resendSeconds > 0
@@ -701,9 +677,7 @@ class _Step2 extends StatelessWidget {
             ),
           ),
         ),
-
         const SizedBox(height: 20),
-        // ── Spam tip ──
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -721,9 +695,7 @@ class _Step2 extends StatelessWidget {
                 child: Text(
                   "Check your spam or junk folder if you can't find it.",
                   style: TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF92400E),
-                      height: 1.5),
+                      fontSize: 12, color: Color(0xFF92400E), height: 1.5),
                 ),
               ),
             ],
@@ -742,8 +714,6 @@ class _Step2 extends StatelessWidget {
     return '${name[0]}${'•' * (name.length - 2)}${name[name.length - 1]}@$domain';
   }
 }
-
-// ─── OTP Box ──────────────────────────────────────────────
 
 class _OtpBox extends StatelessWidget {
   final TextEditingController controller;
@@ -786,9 +756,7 @@ class _OtpBox extends StatelessWidget {
           maxLength: 1,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           style: TextStyle(
-            color: hasError
-                ? const Color(0xFFB91C1C)
-                : AppColors.textPrimary,
+            color: hasError ? const Color(0xFFB91C1C) : const Color.fromARGB(255, 7, 7, 215),
             fontSize: 22,
             fontWeight: FontWeight.w800,
           ),
@@ -798,7 +766,7 @@ class _OtpBox extends StatelessWidget {
             fillColor: hasError
                 ? const Color(0xFFFEF2F2)
                 : isFilled
-                    ? AppColors.primary.withValues(alpha: 0.08)
+                    ? Colors.amber
                     : Colors.white,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(13),
@@ -810,7 +778,7 @@ class _OtpBox extends StatelessWidget {
                 color: hasError
                     ? const Color(0xFFFCA5A5)
                     : isFilled
-                        ? AppColors.primary.withValues(alpha: 0.6)
+                        ? Colors.amber
                         : const Color(0xFFE2E8F0),
                 width: isFilled ? 1.5 : 1,
               ),
@@ -818,9 +786,7 @@ class _OtpBox extends StatelessWidget {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(13),
               borderSide: BorderSide(
-                color: hasError
-                    ? const Color(0xFFEF4444)
-                    : AppColors.primary,
+                color: hasError ? const Color(0xFFEF4444) : AppColors.primary,
                 width: 2,
               ),
             ),
@@ -835,9 +801,9 @@ class _OtpBox extends StatelessWidget {
   }
 }
 
-// ─── Step 3 — New Password ────────────────────────────────
+// ─── Step 3: New Password ─────────────────────────────────
 
-class _Step3 extends StatelessWidget {
+class _PasswordForm extends StatelessWidget {
   final TextEditingController passCtrl;
   final TextEditingController confirmCtrl;
   final GlobalKey<FormState> formKey;
@@ -852,7 +818,7 @@ class _Step3 extends StatelessWidget {
   final VoidCallback onToggleConfirm;
   final VoidCallback onReset;
 
-  const _Step3({
+  const _PasswordForm({
     super.key,
     required this.passCtrl,
     required this.confirmCtrl,
@@ -882,14 +848,13 @@ class _Step3 extends StatelessWidget {
                 'Choose a strong password — mix letters, numbers, and symbols.',
           ),
           const SizedBox(height: 36),
-
-          // ── Password field ──
           TextFormField(
             controller: passCtrl,
             obscureText: obscurePass,
             textInputAction: TextInputAction.next,
-            decoration: _fieldDecor(
-                'New password', Icons.lock_outline_rounded).copyWith(
+            decoration:
+                _buildInputDecor('New password', Icons.lock_outline_rounded)
+                    .copyWith(
               suffixIcon: IconButton(
                 icon: Icon(
                     obscurePass
@@ -906,44 +871,41 @@ class _Step3 extends StatelessWidget {
               return null;
             },
           ),
-
-          // ── Strength bar ──
           if (passCtrl.text.isNotEmpty) ...[
             const SizedBox(height: 10),
-            Row(children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: passStrength,
-                    backgroundColor: const Color(0xFFE2E8F0),
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(strengthColor),
-                    minHeight: 5,
+            Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: passStrength,
+                      backgroundColor: const Color(0xFFE2E8F0),
+                      valueColor: AlwaysStoppedAnimation<Color>(strengthColor),
+                      minHeight: 5,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                strengthLabel,
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: strengthColor),
-              ),
-            ]),
+                const SizedBox(width: 10),
+                Text(
+                  strengthLabel,
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: strengthColor),
+                ),
+              ],
+            ),
             const SizedBox(height: 4),
           ],
-
           const SizedBox(height: 14),
-
-          // ── Confirm field ──
           TextFormField(
             controller: confirmCtrl,
             obscureText: obscureConfirm,
             textInputAction: TextInputAction.done,
-            decoration: _fieldDecor(
-                'Confirm password', Icons.lock_outline_rounded).copyWith(
+            decoration:
+                _buildInputDecor('Confirm password', Icons.lock_outline_rounded)
+                    .copyWith(
               suffixIcon: IconButton(
                 icon: Icon(
                     obscureConfirm
@@ -960,21 +922,16 @@ class _Step3 extends StatelessWidget {
               return null;
             },
           ),
-
           if (error != null) ...[
             const SizedBox(height: 14),
             _ErrorBanner(error!),
           ],
-
           const SizedBox(height: 28),
           _PrimaryBtn(
               label: 'Update password',
               isLoading: isLoading,
               onPressed: onReset),
-
           const SizedBox(height: 16),
-
-          // ── Security tips ──
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -984,16 +941,18 @@ class _Step3 extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(children: [
-                  const Icon(Icons.shield_outlined,
-                      color: AppColors.primary, size: 14),
-                  const SizedBox(width: 6),
-                  const Text('Tips for a strong password',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary)),
-                ]),
+                Row(
+                  children: [
+                    const Icon(Icons.shield_outlined,
+                        color: AppColors.primary, size: 14),
+                    const SizedBox(width: 6),
+                    const Text('Tips for a strong password',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary)),
+                  ],
+                ),
                 const SizedBox(height: 8),
                 ...[
                   'At least 8 characters long',
@@ -1007,8 +966,7 @@ class _Step3 extends StatelessWidget {
                           children: [
                             const Text('• ',
                                 style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.primary)),
+                                    fontSize: 12, color: AppColors.primary)),
                             Expanded(
                               child: Text(tip,
                                   style: const TextStyle(
@@ -1025,12 +983,33 @@ class _Step3 extends StatelessWidget {
       ),
     ).animate().fadeIn(duration: 280.ms);
   }
+
+  InputDecoration _buildInputDecor(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, color: AppColors.primary, size: 20),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+      ),
+    );
+  }
 }
 
 // ─── Success Screen ───────────────────────────────────────
 
-class _SuccessScreen extends StatelessWidget {
-  const _SuccessScreen();
+class _SuccessView extends StatelessWidget {
+  const _SuccessView();
 
   @override
   Widget build(BuildContext context) {
@@ -1087,28 +1066,28 @@ class _SuccessScreen extends StatelessWidget {
                 ).animate().fadeIn(delay: 450.ms),
                 const SizedBox(height: 40),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 24, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(50),
-                    border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.3)),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.3)),
                   ),
-                  child: Row(
+                  child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const SizedBox(
+                      SizedBox(
                         width: 14,
                         height: 14,
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: Colors.white),
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: 10),
                       Text(
                         'Taking you to login…',
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.85),
+                          color: Color.fromRGBO(255, 255, 255, 0.85),
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
