@@ -7,7 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../shared/widgets/custom_button.dart';
-
+import 'package:go_router/go_router.dart';
 class CrisisScreen extends StatelessWidget {
   const CrisisScreen({super.key});
 
@@ -70,7 +70,13 @@ class CrisisScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         leading: IconButton(
           icon: const Icon(LucideIcons.x, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+               if (context.canPop()) {
+                  context.pop();
+              } else {
+                  context.go('/');
+              }
+            },
         ),
         title: const Text(
           'Crisis Support',

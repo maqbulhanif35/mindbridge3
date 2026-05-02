@@ -151,10 +151,10 @@ class _MoodTrackerScreenState extends ConsumerState<MoodTrackerScreen> {
 
   void _goTo(int step) {
     setState(() => _step = step);
-    _pageCtrl.animateToPage(
-      step,
-      duration: const Duration(milliseconds: 380),
-      curve: Curves.easeOutCubic,
+    _pageCtrl.jumpTo(
+      step.toDouble(),
+      // duration: const Duration(milliseconds: 380),
+      // curve: Curves.easeOutCubic,
     );
   }
 
@@ -462,8 +462,8 @@ class _MoodTrackerScreenState extends ConsumerState<MoodTrackerScreen> {
           // Big animated emoji
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 350),
-            switchInCurve: Curves.elasticOut,
-            switchOutCurve: Curves.easeIn,
+           // switchInCurve: Curves.elasticOut,
+            //switchOutCurve: Curves.easeIn,
             transitionBuilder: (child, anim) => ScaleTransition(
               scale: CurvedAnimation(parent: anim, curve: Curves.easeOutBack),
               child: FadeTransition(opacity: anim, child: child),
@@ -518,7 +518,7 @@ class _MoodTrackerScreenState extends ConsumerState<MoodTrackerScreen> {
                   },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 260),
-                    curve: Curves.easeOutBack,
+                  //  curve: Curves.easeOutBack,
                     margin: const EdgeInsets.symmetric(horizontal: 3),
                     padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
                     decoration: BoxDecoration(
@@ -540,7 +540,7 @@ class _MoodTrackerScreenState extends ConsumerState<MoodTrackerScreen> {
                         AnimatedScale(
                           scale: isSelected ? 1.22 : 1.0,
                           duration: const Duration(milliseconds: 260),
-                          curve: Curves.easeOutBack,
+                         // curve: Curves.easeOutBack,
                           child: Text(mood.emoji, style: const TextStyle(fontSize: 26)),
                         ),
                         const SizedBox(height: 6),
@@ -591,7 +591,7 @@ class _MoodTrackerScreenState extends ConsumerState<MoodTrackerScreen> {
                         ),
                       ],
                     ),
-                  ).animate().fadeIn().scale(begin: const Offset(0.8, 0.8), curve: Curves.easeOutBack)
+                  )//.animate().fadeIn().scale(begin: const Offset(0.8, 0.8), curve: Curves.easeOutBack)
                 : const SizedBox(height: 40),
           ),
         ],
@@ -618,7 +618,7 @@ class _MoodTrackerScreenState extends ConsumerState<MoodTrackerScreen> {
                   fontWeight: FontWeight.w900,
                   color: AppColors.textPrimary,
                 ),
-              ).animate().fadeIn(delay: 60.ms).slideX(begin: -0.08, end: 0, curve: Curves.easeOutCubic),
+              ),//.animate().fadeIn(delay: 60.ms).slideX(begin: -0.08, end: 0, curve: Curves.easeOutCubic),
               const SizedBox(height: 4),
               const Text(
                 'Select all that apply — no wrong answers',
@@ -698,10 +698,11 @@ class _MoodTrackerScreenState extends ConsumerState<MoodTrackerScreen> {
                     ],
                   ),
                 ),
-              ).animate(delay: Duration(milliseconds: i * 18)).fadeIn(duration: 250.ms).scale(
-                    begin: const Offset(0.82, 0.82),
-                    curve: Curves.easeOutBack,
-                  );
+              );
+              // ).animate(delay: Duration(milliseconds: i * 18)).fadeIn(duration: 250.ms).scale(
+              //       begin: const Offset(0.82, 0.82),
+              //       curve: Curves.easeOutBack,
+              //     );
             },
           ),
         ),
@@ -728,7 +729,7 @@ class _MoodTrackerScreenState extends ConsumerState<MoodTrackerScreen> {
                   fontWeight: FontWeight.w900,
                   color: AppColors.textPrimary,
                 ),
-              ).animate().fadeIn(delay: 60.ms).slideX(begin: -0.08, end: 0, curve: Curves.easeOutCubic),
+              ),//.animate().fadeIn(delay: 60.ms).slideX(begin: -0.08, end: 0, curve: Curves.easeOutCubic),
               const SizedBox(height: 4),
               const Text(
                 'Pick everything that fits your day',
@@ -812,10 +813,11 @@ class _MoodTrackerScreenState extends ConsumerState<MoodTrackerScreen> {
                     ],
                   ),
                 ),
-              ).animate(delay: Duration(milliseconds: i * 18)).fadeIn(duration: 250.ms).scale(
-                    begin: const Offset(0.82, 0.82),
-                    curve: Curves.easeOutBack,
-                  );
+              );
+              // ).animate(delay: Duration(milliseconds: i * 18)).fadeIn(duration: 250.ms).scale(
+              //       begin: const Offset(0.82, 0.82),
+              //       curve: Curves.easeOutBack,
+              //     );
             },
           ),
         ),
@@ -839,7 +841,7 @@ class _MoodTrackerScreenState extends ConsumerState<MoodTrackerScreen> {
               fontWeight: FontWeight.w900,
               color: AppColors.textPrimary,
             ),
-          ).animate().fadeIn(delay: 60.ms).slideX(begin: -0.08, end: 0, curve: Curves.easeOutCubic),
+          ),//.animate().fadeIn(delay: 60.ms).slideX(begin: -0.08, end: 0, curve: Curves.easeOutCubic),
           const SizedBox(height: 4),
           const Text(
             'A couple more details to personalize your insights',
@@ -851,14 +853,14 @@ class _MoodTrackerScreenState extends ConsumerState<MoodTrackerScreen> {
           _SleepCard(
             sleepHours: _sleepHours,
             onChanged: (v) => setState(() => _sleepHours = v),
-          ).animate().fadeIn(delay: 140.ms).slideY(begin: 0.08, end: 0, curve: Curves.easeOutCubic),
+          ),//.animate().fadeIn(delay: 140.ms).slideY(begin: 0.08, end: 0, curve: Curves.easeOutCubic),
           const SizedBox(height: 16),
 
           // Note card
           _NoteCard(
             controller: _noteCtrl,
             accentColor: _accentColor,
-          ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.08, end: 0, curve: Curves.easeOutCubic),
+          ),//.animate().fadeIn(delay: 200.ms).slideY(begin: 0.08, end: 0, curve: Curves.easeOutCubic),
           const SizedBox(height: 16),
 
           // Summary card
@@ -868,7 +870,7 @@ class _MoodTrackerScreenState extends ConsumerState<MoodTrackerScreen> {
               emotions: _emotions,
               activities: _activities,
               sleepHours: _sleepHours,
-            ).animate().fadeIn(delay: 260.ms).slideY(begin: 0.08, end: 0, curve: Curves.easeOutCubic),
+            ),//.animate().fadeIn(delay: 260.ms).slideY(begin: 0.08, end: 0, curve: Curves.easeOutCubic),
         ],
       ),
     );
@@ -1457,9 +1459,9 @@ class _AlreadyLoggedView extends StatelessWidget {
                       ),
                       Text(moodData.emoji, style: const TextStyle(fontSize: 44)),
                     ],
-                  )
-                      .animate(onPlay: (c) => c.repeat(reverse: true))
-                      .scale(begin: const Offset(1, 1), end: const Offset(1.04, 1.04), duration: 1800.ms, curve: Curves.easeInOut),
+                  ),
+                      //.animate(onPlay: (c) => c.repeat(reverse: true))
+                     // .scale(begin: const Offset(1, 1), end: const Offset(1.04, 1.04), duration: 1800.ms, curve: Curves.easeInOut),
 
                   const SizedBox(height: 24),
 
@@ -1472,7 +1474,7 @@ class _AlreadyLoggedView extends StatelessWidget {
                       ),
                       borderRadius: BorderRadius.circular(24),
                     ),
-                    child: Row(
+                    child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const Icon(LucideIcons.circleCheck, size: 14, color: Colors.white),
