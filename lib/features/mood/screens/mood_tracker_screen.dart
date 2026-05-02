@@ -151,10 +151,10 @@ class _MoodTrackerScreenState extends ConsumerState<MoodTrackerScreen> {
 
   void _goTo(int step) {
     setState(() => _step = step);
-    _pageCtrl.jumpTo(
-      step.toDouble(),
-      // duration: const Duration(milliseconds: 380),
-      // curve: Curves.easeOutCubic,
+    _pageCtrl.animateToPage(
+      step,
+      duration: const Duration(milliseconds: 380),
+      curve: Curves.easeOutCubic,
     );
   }
 
